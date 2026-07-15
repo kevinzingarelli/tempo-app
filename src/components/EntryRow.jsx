@@ -1,0 +1,47 @@
+import { useData } from "../state/DataContext.jsx";
+import { fmtDuration, fmtTime, entrySeconds } from "../lib/format.js";
+import { IconPlay } from "../lib/icons.jsx";
+
+export default function EntryRow({ entry, onEdit }) {
+  const { projectById, startTimer } = useData();
+  const project = projectById(entry.project_id);
+  const secs = entrySeconds(entry);
+
+  function restart(e) {
+    e.stopPropagation();
+    startTimer({
+      description: entry.description,
+      project_id: entry.project_id,
+      tags: entry.tags || [],
+      billable: entry.billable || false,
+    });
+  }
+
+  const sub = [
+    project?.name,
+    `${fmtTime(entry.started_at)}${entry.stopped_at ? "–" + fmtTime(entry.stopped_at) : ""}`,
+    entry.billable ? "€" : null,
+    ...(entry.tags || []).map((t) => "#" + t),
+  ]
+    .filter(Boolean)
+    .join("  ·  ");
+
+  return (
+    <div className="entry" onClick={() => onEdit(entry)} style={{ cursor: "pointer" }}>
+      <span
+        className="entry-dot"
+        style={{ background: project?.color || "#cfcfca" }}
+      />
+      <div className="entry-main">
+        <div className="entry-desc">
+          {entry.description || <span className="muted">Senza descrizione</span>}
+        </div>
+        <div className="entry-sub">{sub}</div>
+      </div>
+      <span className="entry-dur">{fmtDuration(secs)}</span>
+      <button className="entry-play" onClick={restart} aria-label="Riavvia">
+        <IconPlay />
+      </button>
+    </div>
+  );
+}
