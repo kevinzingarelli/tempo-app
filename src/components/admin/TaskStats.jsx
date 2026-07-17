@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { useData } from "../../state/DataContext.jsx";
 import { entrySeconds, fmtDuration, fmtTime, dayKey } from "../../lib/format.js";
-import { buildTaskStats, findAnomalies, deviationPct, fmtPct, deviationColor } from "../../lib/stats.js";
+import { buildTaskStats, findAnomaliesMAD, deviationPct, fmtPct, deviationColor } from "../../lib/stats.js";
 import { IconChevron } from "../../lib/icons.jsx";
 
 export default function TaskStats() {
@@ -32,12 +32,12 @@ export default function TaskStats() {
   if (loading) return <div className="center" style={{ marginTop: 40 }}><span className="spinner" /></div>;
 
   const stats = buildTaskStats(rows, projectById);
-  const anomalies = findAnomalies(stats);
+  const anomalies = findAnomaliesMAD(stats);
 
   return (
     <div>
       <p className="muted" style={{ fontSize: 13, marginTop: 0, marginBottom: 16 }}>
-        Ogni “lavoro” raggruppa le voci con stessa descrizione e stesso progetto. La durata di riferimento è la <b>mediana</b> (quando ci sono almeno 5 registrazioni), altrimenti la durata attesa che hai impostato nel progetto.
+        Ogni “lavoro” raggruppa le voci con stessa descrizione e stesso progetto. La durata di riferimento è la <b>mediana</b>; una voce è segnalata come anomala quando si allontana molto dal comportamento tipico di quel lavoro (statistica robusta, non una soglia fissa). Con poco storico vale la durata attesa impostata nel progetto.
       </p>
 
       {/* Anomalie */}

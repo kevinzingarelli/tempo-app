@@ -24,6 +24,7 @@ create table if not exists public.profiles (
 
 alter table public.profiles add column if not exists cost_rate numeric;
 alter table public.profiles add column if not exists contracted_hours_weekly numeric;
+alter table public.profiles add column if not exists weekly_goal_hours numeric; -- obiettivo personale, modificabile dall'utente stesso
 
 create table if not exists public.projects (
   id               uuid primary key default gen_random_uuid(),
@@ -36,6 +37,7 @@ create table if not exists public.projects (
 
 alter table public.projects add column if not exists client_id uuid references public.clients(id) on delete set null;
 alter table public.projects add column if not exists estimated_seconds integer;
+alter table public.projects add column if not exists budget_seconds integer; -- budget ore totale (opzionale)
 
 create table if not exists public.project_finance (
   project_id    uuid primary key references public.projects(id) on delete cascade,
@@ -68,6 +70,10 @@ create table if not exists public.time_entries (
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
+
+-- Campi per la funzione "pausa" del timer (aggiunti solo se mancano):
+alter table public.time_entries add column if not exists paused_at timestamptz;
+alter table public.time_entries add column if not exists paused_seconds integer not null default 0;
 
 create table if not exists public.favorites (
   id          uuid primary key default gen_random_uuid(),

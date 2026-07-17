@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../../lib/supabase";
 import { useData } from "../../state/DataContext.jsx";
 import Sheet from "../Sheet.jsx";
 import { IconPlus, IconChevron } from "../../lib/icons.jsx";
-import { parseDurationInput, fmtDuration } from "../../lib/format.js";
+import { parseDurationInput, fmtDuration, entrySeconds } from "../../lib/format.js";
 
 const PALETTE = [
   "#27264d", "#3b6ef5", "#1f9d6b", "#e5a300",
@@ -32,6 +33,9 @@ function ProjectForm({ project, onClose }) {
   const [estText, setEstText] = useState(
     project?.estimated_seconds ? fmtDuration(project.estimated_seconds).replace(" ", "") : ""
   );
+  const [budgetText, setBudgetText] = useState(
+    project?.budget_seconds ? String(Math.round(project.budget_seconds / 3600)) : ""
+  );
   const [newClient, setNewClient] = useState("");
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -45,12 +49,17 @@ function ProjectForm({ project, onClose }) {
       if (c) cid = c.id;
     }
     const est = estText.trim() ? parseDurationInput(estText) : null;
+    const budgetH = budgetText.trim() ? Number(budgetText.replace(",", ".")) : null;
     const payload = {
       name: name.trim(),
       color,
       billable_default: billable,
       client_id: cid || null,
       estimated_seconds: est,
+      budget_seconds:
+        budgetH != null && !Number.isNaN(budgetH) && budgetH > 0
+          ? Math.round(budgetH * 3600)
+          : null,
       billable_rate: rate === "" ? null : rate.replace(",", "."),
     };
     if (editing) await updateProject(project.id, payload);
@@ -100,6 +109,12 @@ function ProjectForm({ project, onClose }) {
       </div>
 
       <div className="sheet-row">
+        <label className="field-label">Budget ore totale — opzionale</label>
+        <input className="field" inputMode="decimal" placeholder="Es. 120" value={budgetText} onChange={(e) => setBudgetText(e.target.value)} />
+        <p className="muted" style={{ fontSize: 12, marginTop: 5 }}>Il monte-ore massimo previsto per l'intero progetto. In Dashboard vedi quanto ne è stato usato.</p>
+      </div>
+
+      <div className="sheet-row">
         <label className="field-label">Durata attesa del lavoro — opzionale</label>
         <input className="field" placeholder="Es. 4h, 1:30, 0:45" value={estText} autoCapitalize="none" onChange={(e) => setEstText(e.target.value)} />
         <p className="muted" style={{ fontSize: 12, marginTop: 5 }}>Quanto dovrebbe durare di solito. Serve a segnalare quando ci si mette molto di più o di meno, finché non c'è abbastanza storico.</p>
@@ -124,6 +139,24 @@ export default function ProjectManager() {
   const { projects, projectRate, clientById } = useData();
   const [formProject, setFormProject] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [totals, setTotals] = useState({}); // project_id -> { secs, users:Set }
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("time_entries")
+        .select("project_id, user_id, duration_seconds, started_at, stopped_at")
+        .not("stopped_at", "is", null);
+      const m = {};
+      (data || []).forEach((e) => {
+        const k = e.project_id || "none";
+        if (!m[k]) m[k] = { secs: 0, users: new Set() };
+        m[k].secs += entrySeconds(e);
+        m[k].users.add(e.user_id);
+      });
+      setTotals(m);
+    })();
+  }, []);
 
   const active = projects.filter((p) => !p.archived);
   const archived = projects.filter((p) => p.archived);
@@ -131,8 +164,12 @@ export default function ProjectManager() {
   function line(p) {
     const rate = projectRate(p.id);
     const client = p.client_id ? clientById(p.client_id) : null;
+    const t = totals[p.id];
     const bits = [];
     if (client) bits.push(client.name);
+    if (t && t.secs > 0) bits.push(fmtDuration(t.secs));
+    if (t && t.users.size > 0)
+      bits.push(t.users.size === 1 ? "1 persona" : `${t.users.size} persone`);
     if (rate != null) bits.push(`€ ${rate}/h`);
     return bits.join(" · ");
   }

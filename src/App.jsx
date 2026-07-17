@@ -4,10 +4,13 @@ import { DataProvider, useData } from "./state/DataContext.jsx";
 import Login from "./screens/Login.jsx";
 import Timer from "./screens/Timer.jsx";
 import Reports from "./screens/Reports.jsx";
+import PersonalStats from "./screens/PersonalStats.jsx";
 import Admin from "./screens/Admin.jsx";
 import ConfigNeeded from "./screens/ConfigNeeded.jsx";
 import BottomNav from "./components/BottomNav.jsx";
 import { IconClock } from "./lib/icons.jsx";
+import { entrySeconds } from "./lib/format.js";
+import { useState as useStateReact, useEffect as useEffectReact } from "react";
 
 function LogoutButton() {
   const { signOut } = useAuth();
@@ -53,6 +56,26 @@ function OfflinePill() {
   );
 }
 
+function LongTimerPill({ tab, setTab }) {
+  const { runningEntry } = useData();
+  const [, tick] = useStateReact(0);
+  useEffectReact(() => {
+    const t = setInterval(() => tick((n) => n + 1), 60000);
+    return () => clearInterval(t);
+  }, []);
+  if (!runningEntry || runningEntry.paused_at || tab === "timer") return null;
+  if (entrySeconds(runningEntry) <= 4 * 3600) return null;
+  return (
+    <button
+      className="offline-pill"
+      style={{ background: "var(--warn)", cursor: "pointer" }}
+      onClick={() => setTab("timer")}
+    >
+      ⏳ Timer attivo da più di 4 ore — tocca per controllare
+    </button>
+  );
+}
+
 function MainApp() {
   const { isAdmin } = useAuth();
   const [tab, setTab] = useState("timer");
@@ -61,7 +84,9 @@ function MainApp() {
     <DataProvider>
       <div className="app-shell">
         <OfflinePill />
+        <LongTimerPill tab={tab} setTab={setTab} />
         {tab === "timer" && <Timer />}
+        {tab === "stats" && <PersonalStats />}
         {tab === "reports" && <Reports />}
         {tab === "admin" && isAdmin && <Admin />}
         <BottomNav tab={tab} setTab={setTab} isAdmin={isAdmin} />

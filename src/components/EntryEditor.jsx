@@ -15,6 +15,7 @@ import { IconChevron, IconTrash, IconStar } from "../lib/icons.jsx";
 export default function EntryEditor({ open, onClose, entry }) {
   const { addEntry, updateEntry, deleteEntry, addFavorite, projectById } = useData();
   const editing = !!entry;
+  const isRunning = editing && !entry.stopped_at;
 
   const [mode, setMode] = useState(editing ? "time" : "duration");
   const [description, setDescription] = useState(entry?.description || "");
@@ -46,6 +47,25 @@ export default function EntryEditor({ open, onClose, entry }) {
     setErr(null);
     let started_at, stopped_at;
 
+    // timer in corso: si cambia solo l'inizio, la fine resta aperta
+    if (isRunning) {
+      const s2 = combineDateTime(date, startT);
+      const limit = entry.paused_at ? new Date(entry.paused_at) : new Date();
+      if (s2 >= limit) {
+        setErr("L'inizio deve essere prima di adesso.");
+        return;
+      }
+      await updateEntry(entry.id, {
+        description,
+        project_id: projectId,
+        tags,
+        billable,
+        started_at: s2.toISOString(),
+      });
+      onClose();
+      return;
+    }
+
     if (mode === "duration") {
       const secs = parseDurationInput(durText);
       if (!secs || secs <= 0) {
@@ -73,6 +93,8 @@ export default function EntryEditor({ open, onClose, entry }) {
       billable,
       started_at,
       stopped_at,
+      paused_at: null,
+      paused_seconds: 0,
     };
 
     if (editing) {
@@ -92,7 +114,7 @@ export default function EntryEditor({ open, onClose, entry }) {
     <Sheet
       open={open}
       onClose={onClose}
-      title={editing ? "Modifica voce" : "Aggiungi ore"}
+      title={isRunning ? "Modifica timer in corso" : editing ? "Modifica voce" : "Aggiungi ore"}
     >
       {/* Descrizione */}
       <div className="sheet-row">
@@ -137,6 +159,7 @@ export default function EntryEditor({ open, onClose, entry }) {
 
       {/* Modalità durata / orario */}
       <div className="sheet-row">
+        {!isRunning && (
         <div className="segment" style={{ marginBottom: 12 }}>
           <button
             className={mode === "duration" ? "active" : ""}
@@ -157,6 +180,7 @@ export default function EntryEditor({ open, onClose, entry }) {
             Orario
           </button>
         </div>
+        )}
 
         <label className="field-label">Data</label>
         <input
@@ -167,7 +191,24 @@ export default function EntryEditor({ open, onClose, entry }) {
           style={{ marginBottom: 12 }}
         />
 
-        {mode === "duration" ? (
+        {isRunning ? (
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label className="field-label">Inizio</label>
+              <input
+                className="field"
+                type="time"
+                value={startT}
+                onChange={(e) => setStartT(e.target.value)}
+              />
+            </div>
+            <div style={{ flex: 1, display: "flex", alignItems: "flex-end" }}>
+              <p className="muted" style={{ fontSize: 12.5, margin: "0 0 12px" }}>
+                Il timer continua a correre: sposti solo l'inizio.
+              </p>
+            </div>
+          </div>
+        ) : mode === "duration" ? (
           <>
             <label className="field-label">Durata</label>
             <input
@@ -177,6 +218,21 @@ export default function EntryEditor({ open, onClose, entry }) {
               autoCapitalize="none"
               onChange={(e) => setDurText(e.target.value)}
             />
+            <div className="chips" style={{ marginTop: 8 }}>
+              {[["−15m", -900], ["+15m", 900], ["+1h", 3600]].map(([lbl, delta]) => (
+                <button
+                  key={lbl}
+                  className="chip"
+                  onClick={() => {
+                    const cur = parseDurationInput(durText) || 0;
+                    const next = Math.max(0, cur + delta);
+                    setDurText(fmtDuration(next).replace(" ", ""));
+                  }}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
           </>
         ) : (
           <div style={{ display: "flex", gap: 10 }}>

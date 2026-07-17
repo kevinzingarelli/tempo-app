@@ -6,8 +6,8 @@ export function ProgressRing({
   max = 1,
   size = 120,
   stroke = 12,
-  color = "#27264d",
-  track = "rgba(39,38,77,0.10)",
+  color = "var(--brand)",
+  track = "var(--ring-track)",
   centerTop,
   centerBottom,
 }) {
@@ -76,7 +76,7 @@ export function Donut({ segments = [], size = 120, stroke = 16, centerTop, cente
   return (
     <div style={{ position: "relative", width: size, height: size }}>
       <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(39,38,77,0.08)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--ring-track)" strokeWidth={stroke} />
         {segments.map((seg, i) => {
           const frac = seg.value / total;
           const dash = frac * c;
@@ -125,7 +125,7 @@ export function Donut({ segments = [], size = 120, stroke = 16, centerTop, cente
 }
 
 // Barre verticali per tendenze (es. ore per settimana)
-export function MiniBars({ data = [], height = 120, color = "#27264d", formatValue }) {
+export function MiniBars({ data = [], height = 120, color = "var(--brand)", formatValue }) {
   const max = Math.max(1, ...data.map((d) => d.value));
   const barGap = 6;
   return (
@@ -173,7 +173,7 @@ export function MiniBars({ data = [], height = 120, color = "#27264d", formatVal
 }
 
 // Barra orizzontale singola (riutilizzabile)
-export function HBar({ label, value, max, color = "#27264d", valueLabel, onClick }) {
+export function HBar({ label, value, max, color = "var(--brand)", valueLabel, onClick }) {
   const w = max > 0 ? (value / max) * 100 : 0;
   return (
     <div className="bar-row" onClick={onClick} style={onClick ? { cursor: "pointer" } : undefined}>

@@ -21,31 +21,54 @@ function csvCell(v) {
   return s;
 }
 
+function toISODate(d) {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+}
+
 export default function AdminReport() {
-  const { projectById, projectRate, toast } = useData();
+  const { projectById, projectRate, clients, clientById, activeProjects, projects, toast } = useData();
   const [period, setPeriod] = useState("week");
+  const [fromDate, setFromDate] = useState(() => toISODate(startOfWeek()));
+  const [toDate, setToDate] = useState(() => toISODate(new Date()));
   const [rows, setRows] = useState([]);
   const [people, setPeople] = useState({});
   const [peopleList, setPeopleList] = useState([]);
   const [userFilter, setUserFilter] = useState("all");
+  const [projFilter, setProjFilter] = useState("all");
+  const [clientFilter, setClientFilter] = useState("all");
+  const [view, setView] = useState("list"); // list | grid
+  const [gridWeek, setGridWeek] = useState(() => startOfWeek());
   const [loading, setLoading] = useState(true);
 
-  const from =
-    period === "week"
-      ? startOfWeek()
-      : period === "month"
-      ? startOfMonth()
-      : new Date(0);
+  // scorciatoie periodo -> impostano le date
+  function setQuickPeriod(p) {
+    setPeriod(p);
+    const today = new Date();
+    if (p === "week") setFromDate(toISODate(startOfWeek()));
+    else if (p === "month") setFromDate(toISODate(startOfMonth()));
+    else setFromDate("2024-01-01");
+    setToDate(toISODate(today));
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
+    const from = new Date(fromDate + "T00:00:00");
+    const to = new Date(toDate + "T23:59:59");
+    // per la griglia serve anche la settimana selezionata
+    const gridEnd = new Date(gridWeek);
+    gridEnd.setDate(gridEnd.getDate() + 7);
+    const minFrom = new Date(Math.min(from.getTime(), gridWeek.getTime()));
+    const maxTo = new Date(Math.max(to.getTime(), gridEnd.getTime()));
+
     const [{ data: profs }, { data: ent }] = await Promise.all([
-      supabase.from("profiles").select("id, name"),
+      supabase.from("profiles").select("id, name, active"),
       supabase
         .from("time_entries")
         .select("*")
         .not("stopped_at", "is", null)
-        .gte("started_at", from.toISOString())
+        .gte("started_at", minFrom.toISOString())
+        .lte("started_at", maxTo.toISOString())
         .order("started_at", { ascending: false }),
     ]);
     const map = {};
@@ -54,14 +77,25 @@ export default function AdminReport() {
     setPeopleList(profs || []);
     setRows(ent || []);
     setLoading(false);
-  }, [from]);
+  }, [fromDate, toDate, gridWeek]);
 
   useEffect(() => {
     load();
-  }, [period]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [load]);
 
-  const filtered =
-    userFilter === "all" ? rows : rows.filter((e) => e.user_id === userFilter);
+  const from = new Date(fromDate + "T00:00:00");
+  const to = new Date(toDate + "T23:59:59");
+  const filtered = rows.filter((e) => {
+    const d = new Date(e.started_at);
+    if (d < from || d > to) return false;
+    if (userFilter !== "all" && e.user_id !== userFilter) return false;
+    if (projFilter !== "all" && e.project_id !== projFilter) return false;
+    if (clientFilter !== "all") {
+      const p = projectById(e.project_id);
+      if ((p?.client_id || "none") !== clientFilter) return false;
+    }
+    return true;
+  });
 
   const totalSecs = filtered.reduce((s, e) => s + entrySeconds(e), 0);
 
@@ -146,34 +180,158 @@ export default function AdminReport() {
     }
   }
 
+  // ---- Griglia settimanale ore × giorno ----
+  const gridDays = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(gridWeek);
+    d.setDate(gridWeek.getDate() + i);
+    gridDays.push(d);
+  }
+  const gridEndX = new Date(gridWeek);
+  gridEndX.setDate(gridWeek.getDate() + 7);
+  const gridData = {};
+  for (const e of rows) {
+    const d = new Date(e.started_at);
+    if (d < gridWeek || d >= gridEndX) continue;
+    if (projFilter !== "all" && e.project_id !== projFilter) continue;
+    if (clientFilter !== "all") {
+      const p = projectById(e.project_id);
+      if ((p?.client_id || "none") !== clientFilter) continue;
+    }
+    const dayIdx = Math.floor((d - gridWeek) / 86400000);
+    if (!gridData[e.user_id]) gridData[e.user_id] = Array(7).fill(0);
+    gridData[e.user_id][dayIdx] += entrySeconds(e);
+  }
+  const gridRows = peopleList
+    .filter((p) => p.active !== false || gridData[p.id])
+    .map((p) => {
+      const days = gridData[p.id] || Array(7).fill(0);
+      return { id: p.id, name: p.name || "Senza nome", days, total: days.reduce((a, b) => a + b, 0) };
+    })
+    .sort((a, b) => b.total - a.total);
+  const gridLabel =
+    gridDays[0].toLocaleDateString("it-IT", { day: "numeric", month: "short" }) +
+    " – " +
+    gridDays[6].toLocaleDateString("it-IT", { day: "numeric", month: "short" });
+  const isCurGridWeek = startOfWeek().getTime() === gridWeek.getTime();
+  function shiftGrid(delta) {
+    const d = new Date(gridWeek);
+    d.setDate(d.getDate() + delta * 7);
+    setGridWeek(startOfWeek(d));
+  }
+  function fmtCell(secs) {
+    if (secs === 0) return "–";
+    const h = secs / 3600;
+    return h >= 10 ? Math.round(h) + "h" : h.toFixed(1).replace(".", ",") + "h";
+  }
+
   return (
     <div>
       <div className="segment" style={{ marginBottom: 12 }}>
-        <button className={period === "week" ? "active" : ""} onClick={() => setPeriod("week")}>
+        <button className={view === "list" ? "active" : ""} onClick={() => setView("list")}>Elenco</button>
+        <button className={view === "grid" ? "active" : ""} onClick={() => setView("grid")}>Griglia settimana</button>
+      </div>
+
+      {view === "grid" && (
+        <>
+          <div className="week-nav">
+            <button className="week-arrow" onClick={() => shiftGrid(-1)}>‹</button>
+            <div className="w-label">{isCurGridWeek ? "Questa settimana" : gridLabel}</div>
+            <button className="week-arrow" onClick={() => shiftGrid(1)} disabled={isCurGridWeek}>›</button>
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <select className="field" style={{ flex: 1 }} value={clientFilter} onChange={(e) => setClientFilter(e.target.value)}>
+              <option value="all">Tutti i clienti</option>
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <option value="none">Senza cliente</option>
+            </select>
+            <select className="field" style={{ flex: 1 }} value={projFilter} onChange={(e) => setProjFilter(e.target.value)}>
+              <option value="all">Tutti i progetti</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          {loading ? (
+            <div className="center" style={{ marginTop: 30 }}><span className="spinner" /></div>
+          ) : (
+            <div className="card grid-wrap">
+              <table className="wgrid">
+                <thead>
+                  <tr>
+                    <th>Persona</th>
+                    {gridDays.map((d, i) => (
+                      <th key={i}>{["Lun","Mar","Mer","Gio","Ven","Sab","Dom"][i]}<br/>{d.getDate()}</th>
+                    ))}
+                    <th className="tot">Totale</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gridRows.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.name}</td>
+                      {r.days.map((s2, i) => (
+                        <td key={i} className={s2 === 0 ? "zero" : ""}>{fmtCell(s2)}</td>
+                      ))}
+                      <td className="tot">{fmtDuration(r.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+
+      {view === "list" && (
+      <>
+      <div className="segment" style={{ marginBottom: 10 }}>
+        <button className={period === "week" ? "active" : ""} onClick={() => setQuickPeriod("week")}>
           Settimana
         </button>
-        <button className={period === "month" ? "active" : ""} onClick={() => setPeriod("month")}>
+        <button className={period === "month" ? "active" : ""} onClick={() => setQuickPeriod("month")}>
           Mese
         </button>
-        <button className={period === "all" ? "active" : ""} onClick={() => setPeriod("all")}>
+        <button className={period === "all" ? "active" : ""} onClick={() => setQuickPeriod("all")}>
           Tutto
         </button>
       </div>
 
-      {/* filtro persona */}
-      <select
-        className="field"
-        value={userFilter}
-        onChange={(e) => setUserFilter(e.target.value)}
-        style={{ marginBottom: 14 }}
-      >
-        <option value="all">Tutte le persone</option>
-        {peopleList.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name || "Senza nome"}
-          </option>
-        ))}
-      </select>
+      {/* intervallo libero */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+        <div style={{ flex: 1 }}>
+          <label className="field-label">Dal</label>
+          <input type="date" className="field" value={fromDate} onChange={(e) => { setFromDate(e.target.value); setPeriod("custom"); }} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label className="field-label">Al</label>
+          <input type="date" className="field" value={toDate} onChange={(e) => { setToDate(e.target.value); setPeriod("custom"); }} />
+        </div>
+      </div>
+
+      {/* filtri */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        <select
+          className="field"
+          style={{ flex: "1 1 45%" }}
+          value={userFilter}
+          onChange={(e) => setUserFilter(e.target.value)}
+        >
+          <option value="all">Tutte le persone</option>
+          {peopleList.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name || "Senza nome"}
+            </option>
+          ))}
+        </select>
+        <select className="field" style={{ flex: "1 1 45%" }} value={clientFilter} onChange={(e) => setClientFilter(e.target.value)}>
+          <option value="all">Tutti i clienti</option>
+          {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <option value="none">Senza cliente</option>
+        </select>
+        <select className="field" style={{ flex: "1 1 100%" }} value={projFilter} onChange={(e) => setProjFilter(e.target.value)}>
+          <option value="all">Tutti i progetti</option>
+          {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </div>
 
       {loading ? (
         <div className="center" style={{ marginTop: 30 }}>
@@ -291,6 +449,8 @@ export default function AdminReport() {
             </>
           )}
         </>
+      )}
+      </>
       )}
     </div>
   );

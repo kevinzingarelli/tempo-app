@@ -1,4 +1,4 @@
-# Tempo — registrazione ore
+# Pomodoro — il tuo tempo, dalla tua parte
 
 App per registrare le ore di lavoro di un piccolo team. Timer + inserimento
 manuale, progetti, preferiti, report personali e report admin, installabile

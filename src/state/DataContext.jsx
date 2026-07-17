@@ -262,6 +262,8 @@ export function DataProvider({ children }) {
         started_at: now.toISOString(),
         stopped_at: null,
         duration_seconds: null,
+        paused_at: null,
+        paused_seconds: 0,
       };
       writeLocalTimer(entry);
       await persist({ type: "insert", table: "time_entries", payload: entry }, () =>
@@ -273,12 +275,19 @@ export function DataProvider({ children }) {
   );
 
   async function stopTimerInternal(entry, when) {
-    const stoppedAt = when || new Date();
+    // Se era in pausa, il lavoro è finito al momento della pausa.
+    const stoppedAt = entry.paused_at ? new Date(entry.paused_at) : when || new Date();
     const dur = Math.max(
       0,
-      Math.floor((stoppedAt - new Date(entry.started_at)) / 1000)
+      Math.floor(
+        (stoppedAt - new Date(entry.started_at)) / 1000 - (entry.paused_seconds || 0)
+      )
     );
-    const fields = { stopped_at: stoppedAt.toISOString(), duration_seconds: dur };
+    const fields = {
+      stopped_at: stoppedAt.toISOString(),
+      duration_seconds: dur,
+      paused_at: null,
+    };
     setEntries((a) =>
       a.map((e) => (e.id === entry.id ? { ...e, ...fields } : e))
     );
@@ -294,6 +303,38 @@ export function DataProvider({ children }) {
     const current = entries.find((e) => !e.stopped_at);
     if (current) await stopTimerInternal(current, new Date());
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entries, persist]);
+
+  // ---------- Pausa / Riprendi ----------
+  const pauseTimer = useCallback(async () => {
+    const current = entries.find((e) => !e.stopped_at);
+    if (!current || current.paused_at) return;
+    const fields = { paused_at: new Date().toISOString() };
+    const updated = { ...current, ...fields };
+    writeLocalTimer(updated);
+    await persist(
+      { type: "update", table: "time_entries", payload: { id: current.id, ...fields } },
+      () => setEntries((a) => a.map((e) => (e.id === current.id ? updated : e)))
+    );
+  }, [entries, persist]);
+
+  const resumeTimer = useCallback(async () => {
+    const current = entries.find((e) => !e.stopped_at);
+    if (!current || !current.paused_at) return;
+    const extra = Math.max(
+      0,
+      Math.floor((Date.now() - new Date(current.paused_at)) / 1000)
+    );
+    const fields = {
+      paused_at: null,
+      paused_seconds: (current.paused_seconds || 0) + extra,
+    };
+    const updated = { ...current, ...fields };
+    writeLocalTimer(updated);
+    await persist(
+      { type: "update", table: "time_entries", payload: { id: current.id, ...fields } },
+      () => setEntries((a) => a.map((e) => (e.id === current.id ? updated : e)))
+    );
   }, [entries, persist]);
 
   const updateRunning = useCallback(
@@ -557,6 +598,31 @@ export function DataProvider({ children }) {
     new Set(entries.flatMap((e) => e.tags || []))
   ).slice(0, 30);
 
+  // suggerimenti descrizione dallo storico personale:
+  // per ogni descrizione usata, ricordo frequenza e progetto più frequente
+  const descSuggestions = (() => {
+    const map = {};
+    for (const e of entries) {
+      const d = (e.description || "").trim();
+      if (!d) continue;
+      const k = d.toLowerCase();
+      if (!map[k]) map[k] = { text: d, count: 0, projects: {} };
+      map[k].count++;
+      if (e.project_id) {
+        map[k].projects[e.project_id] = (map[k].projects[e.project_id] || 0) + 1;
+      }
+    }
+    return Object.values(map)
+      .map((s) => {
+        let best = null, bestN = 0;
+        for (const [pid, n] of Object.entries(s.projects)) {
+          if (n > bestN) { best = pid; bestN = n; }
+        }
+        return { text: s.text, count: s.count, project_id: best };
+      })
+      .sort((a, b) => b.count - a.count);
+  })();
+
   const value = {
     loading,
     online,
@@ -569,8 +635,11 @@ export function DataProvider({ children }) {
     favorites,
     runningEntry,
     tagSuggestions,
+    descSuggestions,
     startTimer,
     stopTimer,
+    pauseTimer,
+    resumeTimer,
     updateRunning,
     addEntry,
     updateEntry,

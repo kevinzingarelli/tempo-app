@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useData } from "../state/DataContext.jsx";
+import WeekView from "../components/WeekView.jsx";
+import DayView from "../components/DayView.jsx";
 import { useAuth } from "../state/AuthContext.jsx";
 import { ProgressRing } from "../components/Charts.jsx";
 import {
@@ -10,6 +12,7 @@ export default function Reports() {
   const { entries, projectById } = useData();
   const { profile } = useAuth();
   const [period, setPeriod] = useState("week");
+  const [view, setView] = useState("summary");
 
   const from = period === "week" ? startOfWeek() : period === "month" ? startOfMonth() : new Date(0);
   const inRange = entries.filter((e) => e.stopped_at && new Date(e.started_at) >= from);
@@ -43,6 +46,17 @@ export default function Reports() {
       <div className="screen-title">Report</div>
       <div className="screen-sub">Le tue ore registrate</div>
 
+      <div className="segment" style={{ marginBottom: 14 }}>
+        <button className={view === "day" ? "active" : ""} onClick={() => setView("day")}>Giornata</button>
+        <button className={view === "week" ? "active" : ""} onClick={() => setView("week")}>Settimana</button>
+        <button className={view === "summary" ? "active" : ""} onClick={() => setView("summary")}>Riepilogo</button>
+      </div>
+
+      {view === "day" && <DayView />}
+      {view === "week" && <WeekView />}
+
+      {view === "summary" && (
+      <>
       <div className="segment" style={{ marginBottom: 18 }}>
         <button className={period === "week" ? "active" : ""} onClick={() => setPeriod("week")}>Settimana</button>
         <button className={period === "month" ? "active" : ""} onClick={() => setPeriod("month")}>Mese</button>
@@ -52,7 +66,7 @@ export default function Reports() {
       {/* Anello ore vs contratto */}
       {contractedSecs != null && (
         <div className="card" style={{ padding: 18, display: "flex", alignItems: "center", gap: 18, marginBottom: 14 }}>
-          <ProgressRing value={totalSecs} max={contractedSecs} size={104} color="#27264d" centerTop={Math.round(contractPct) + "%"} />
+          <ProgressRing value={totalSecs} max={contractedSecs} size={104} color="var(--brand)" centerTop={Math.round(contractPct) + "%"} />
           <div>
             <div style={{ fontWeight: 700, fontSize: 17 }}>{fmtDuration(totalSecs)}</div>
             <div className="muted" style={{ fontSize: 13 }}>su {fmtDuration(contractedSecs)} da contratto</div>
@@ -86,6 +100,8 @@ export default function Reports() {
       )}
 
       <p className="muted center" style={{ fontSize: 12, marginTop: 18 }}>{fmtHours(totalSecs)} ore in formato decimale</p>
+      </>
+      )}
     </div>
   );
 }

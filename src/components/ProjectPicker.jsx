@@ -3,7 +3,7 @@ import Sheet from "./Sheet.jsx";
 import { IconCheck } from "../lib/icons.jsx";
 
 export default function ProjectPicker({ open, onClose, value, onChange }) {
-  const { activeProjects } = useData();
+  const { activeProjects, clientById } = useData();
 
   function pick(id) {
     onChange(id);
@@ -21,7 +21,7 @@ export default function ProjectPicker({ open, onClose, value, onChange }) {
           <span className="muted" style={{ fontWeight: 600 }}>
             Nessun progetto
           </span>
-          {!value && <IconCheck style={{ width: 18, height: 18, color: "#27264d" }} />}
+          {!value && <IconCheck style={{ width: 18, height: 18, color: "var(--brand)" }} />}
         </button>
         {activeProjects.map((p) => (
           <button
@@ -35,10 +35,17 @@ export default function ProjectPicker({ open, onClose, value, onChange }) {
                 className="entry-dot"
                 style={{ background: p.color || "#999" }}
               />
-              <span style={{ fontWeight: 600 }}>{p.name}</span>
+              <span>
+                <span style={{ fontWeight: 600, display: "block" }}>{p.name}</span>
+                {p.client_id && clientById(p.client_id) && (
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    {clientById(p.client_id).name}
+                  </span>
+                )}
+              </span>
             </span>
             {value === p.id && (
-              <IconCheck style={{ width: 18, height: 18, color: "#27264d" }} />
+              <IconCheck style={{ width: 18, height: 18, color: "var(--brand)" }} />
             )}
           </button>
         ))}

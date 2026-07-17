@@ -3,8 +3,9 @@ import { fmtDuration, fmtTime, entrySeconds } from "../lib/format.js";
 import { IconPlay } from "../lib/icons.jsx";
 
 export default function EntryRow({ entry, onEdit }) {
-  const { projectById, startTimer } = useData();
+  const { projectById, clientById, startTimer } = useData();
   const project = projectById(entry.project_id);
+  const client = project?.client_id ? clientById(project.client_id) : null;
   const secs = entrySeconds(entry);
 
   function restart(e) {
@@ -18,7 +19,7 @@ export default function EntryRow({ entry, onEdit }) {
   }
 
   const sub = [
-    project?.name,
+    project?.name && client ? `${project.name} (${client.name})` : project?.name,
     `${fmtTime(entry.started_at)}${entry.stopped_at ? "–" + fmtTime(entry.stopped_at) : ""}`,
     entry.billable ? "€" : null,
     ...(entry.tags || []).map((t) => "#" + t),

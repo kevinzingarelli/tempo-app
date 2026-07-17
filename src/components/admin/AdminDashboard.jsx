@@ -5,7 +5,7 @@ import { ProgressRing, Donut, MiniBars, HBar } from "../Charts.jsx";
 import {
   entrySeconds, fmtDuration, startOfWeek, startOfMonth, dayKey,
 } from "../../lib/format.js";
-import { buildTaskStats, findAnomalies, fmtPct } from "../../lib/stats.js";
+import { buildTaskStats, findAnomaliesMAD, fmtPct } from "../../lib/stats.js";
 
 const PALETTE = ["#27264d", "#3b6ef5", "#1f9d6b", "#e5a300", "#ff8a3d", "#e5484d", "#b14bd8", "#0ca6a6"];
 
@@ -17,11 +17,12 @@ function hoursOf(secs) {
 }
 
 export default function AdminDashboard() {
-  const { projectById, projectRate, clientById } = useData();
+  const { projectById, projectRate, clientById, projects } = useData();
   const [period, setPeriod] = useState("week");
   const [entries, setEntries] = useState([]);
   const [weekEntries, setWeekEntries] = useState([]);
   const [people, setPeople] = useState({});
+  const [budgetUsed, setBudgetUsed] = useState({}); // project_id -> secs totali
   const [loading, setLoading] = useState(true);
 
   const from = period === "week" ? startOfWeek() : period === "month" ? startOfMonth() : new Date(0);
@@ -41,8 +42,23 @@ export default function AdminDashboard() {
     setPeople(map);
     setEntries(ent || []);
     setWeekEntries(wk || []);
+
+    // ore totali (da sempre) per i progetti con budget
+    const budgetIds = projects.filter((p) => p.budget_seconds).map((p) => p.id);
+    if (budgetIds.length) {
+      const { data: bent } = await supabase
+        .from("time_entries")
+        .select("project_id, duration_seconds, started_at, stopped_at")
+        .in("project_id", budgetIds)
+        .not("stopped_at", "is", null);
+      const bu = {};
+      (bent || []).forEach((e) => {
+        bu[e.project_id] = (bu[e.project_id] || 0) + entrySeconds(e);
+      });
+      setBudgetUsed(bu);
+    }
     setLoading(false);
-  }, [from]);
+  }, [from, projects]);
 
   useEffect(() => { load(); }, [period]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -100,7 +116,7 @@ export default function AdminDashboard() {
 
   // anomalie (sull'insieme del periodo)
   const taskStats = buildTaskStats(entries, projectById);
-  const anomalies = findAnomalies(taskStats);
+  const anomalies = findAnomaliesMAD(taskStats);
 
   // produttività: ore per persona
   const personRows = Object.entries(byPerson)
@@ -184,7 +200,7 @@ export default function AdminDashboard() {
               value={totalSecs}
               max={contractedSecs}
               size={104}
-              color="#27264d"
+              color="var(--brand)"
               centerTop={contractPct != null ? Math.round(contractPct) + "%" : "—"}
             />
             <div>
@@ -215,7 +231,7 @@ export default function AdminDashboard() {
       {/* Tendenza */}
       <div className="section-label">Tendenza — ultime 8 settimane</div>
       <div className="card" style={{ padding: "16px 12px 10px" }}>
-        <MiniBars data={weekBuckets} height={110} color="#27264d" formatValue={(v) => v + "h"} />
+        <MiniBars data={weekBuckets} height={110} color="var(--brand)" formatValue={(v) => v + "h"} />
       </div>
 
       {/* Redditività per cliente */}
@@ -265,6 +281,100 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Copertura settimanale */}
+      {(() => {
+        const wkStart = startOfWeek();
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yKey = yesterday.toDateString();
+        const perPerson = {};
+        const yesterdaySet = new Set();
+        for (const e of weekEntries) {
+          const d = new Date(e.started_at);
+          if (d >= wkStart) {
+            perPerson[e.user_id] = (perPerson[e.user_id] || 0) + entrySeconds(e);
+          }
+          if (d.toDateString() === yKey) yesterdaySet.add(e.user_id);
+        }
+        const rows2 = activePeople
+          .map((p) => {
+            const secs = perPerson[p.id] || 0;
+            const target = p.contracted_hours_weekly
+              ? Number(p.contracted_hours_weekly) * 3600
+              : null;
+            return {
+              id: p.id,
+              name: p.name || "—",
+              secs,
+              target,
+              pct: target ? (secs / target) * 100 : null,
+              missedYesterday: !yesterdaySet.has(p.id) && yesterday.getDay() !== 0 && yesterday.getDay() !== 6,
+            };
+          })
+          .sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
+        if (rows2.length === 0) return null;
+        return (
+          <>
+            <div className="section-label">Copertura — questa settimana</div>
+            <div className="card">
+              {rows2.map((r) => (
+                <div key={r.id} className="cover-row">
+                  <span className="cover-name">{r.name}</span>
+                  {r.missedYesterday && <span className="cover-badge">0 ieri</span>}
+                  <span style={{ width: 130, flexShrink: 0 }}>
+                    <span className="budget-bar" style={{ marginTop: 0 }}>
+                      <span
+                        className={"budget-fill" + (r.pct != null && r.pct < 50 ? " over" : "")}
+                        style={{ width: `${Math.min(100, r.pct ?? 0)}%`, background: r.pct == null ? "var(--line-strong)" : undefined }}
+                      />
+                    </span>
+                  </span>
+                  <span className="entry-dur" style={{ fontSize: 13, width: 84, textAlign: "right" }}>
+                    {fmtDuration(r.secs)}{r.target ? ` / ${Math.round(r.target / 3600)}h` : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
+        );
+      })()}
+
+      {/* Budget progetti */}
+      {(() => {
+        const withBudget = projects.filter((p) => p.budget_seconds && !p.archived);
+        if (withBudget.length === 0) return null;
+        return (
+          <>
+            <div className="section-label">Budget ore per progetto</div>
+            <div className="card">
+              {withBudget.map((p) => {
+                const used = budgetUsed[p.id] || 0;
+                const pct = (used / p.budget_seconds) * 100;
+                return (
+                  <div key={p.id} className="list-action" style={{ display: "block" }}>
+                    <div className="row-between">
+                      <span style={{ display: "flex", alignItems: "center", gap: 9, fontWeight: 600 }}>
+                        <span className="entry-dot" style={{ background: p.color }} />
+                        {p.name}
+                      </span>
+                      <span className="entry-dur" style={{ color: pct > 100 ? "var(--stop)" : pct > 85 ? "var(--warn)" : "var(--ink)" }}>
+                        {Math.round(pct)}%
+                      </span>
+                    </div>
+                    <div className="budget-bar">
+                      <div className={"budget-fill" + (pct > 100 ? " over" : "")} style={{ width: `${Math.min(100, pct)}%` }} />
+                    </div>
+                    <div className="muted" style={{ fontSize: 12, marginTop: 5 }}>
+                      {fmtDuration(used)} su {fmtDuration(p.budget_seconds)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        );
+      })()}
 
       <p className="muted center" style={{ fontSize: 11.5, marginTop: 18 }}>
         Il dettaglio voce per voce e l'export CSV sono nella scheda “Report”.

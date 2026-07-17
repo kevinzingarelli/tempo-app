@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon-32.png", "apple-touch-icon.png"],
       manifest: {
-        name: "Tempo",
-        short_name: "Tempo",
-        description: "Registra le tue ore di lavoro.",
+        name: "Pomodoro",
+        short_name: "Pomodoro",
+        description: "Il tuo tempo, dalla tua parte.",
         lang: "it",
         theme_color: "#16161D",
         background_color: "#16161D",

@@ -86,7 +86,8 @@ export function startOfMonth(ref = new Date()) {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
-// Durata in secondi di una voce (gestisce anche timer in corso)
+// Durata in secondi di una voce (gestisce timer in corso e in pausa).
+// paused_seconds = tempo totale trascorso in pausa (da sottrarre).
 export function entrySeconds(entry, now = Date.now()) {
   if (entry.stopped_at) {
     if (typeof entry.duration_seconds === "number" && entry.duration_seconds >= 0) {
@@ -94,11 +95,22 @@ export function entrySeconds(entry, now = Date.now()) {
     }
     return Math.max(
       0,
-      Math.floor((new Date(entry.stopped_at) - new Date(entry.started_at)) / 1000)
+      Math.floor(
+        (new Date(entry.stopped_at) - new Date(entry.started_at)) / 1000 -
+          (entry.paused_seconds || 0)
+      )
+    );
+  }
+  const pausedSecs = entry.paused_seconds || 0;
+  // in pausa: il tempo è congelato al momento della pausa
+  if (entry.paused_at) {
+    return Math.max(
+      0,
+      Math.floor((new Date(entry.paused_at) - new Date(entry.started_at)) / 1000 - pausedSecs)
     );
   }
   // in corso
-  return Math.max(0, Math.floor((now - new Date(entry.started_at)) / 1000));
+  return Math.max(0, Math.floor((now - new Date(entry.started_at)) / 1000 - pausedSecs));
 }
 
 // ---- Parsing input manuale durata ----

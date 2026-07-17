@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useAuth } from "../state/AuthContext.jsx";
-import { IconClock } from "../lib/icons.jsx";
 
 export default function Login() {
   const { signIn } = useAuth();
@@ -32,12 +31,12 @@ export default function Login() {
     <div className="login-wrap">
       <div
         className="login-logo"
-        style={{ background: "#16161d", display: "grid", placeItems: "center" }}
+        style={{ display: "grid", placeItems: "center", overflow: "hidden" }}
       >
-        <IconClock style={{ width: 32, height: 32, color: "#ff8a3d" }} />
+        <img src="/icon-192.png" alt="Pomodoro" style={{ width: "100%", height: "100%" }} />
       </div>
-      <h1 className="login-h">Tempo</h1>
-      <p className="login-p">Accedi per registrare le tue ore.</p>
+      <h1 className="login-h">Pomodoro</h1>
+      <p className="login-p">Il tuo tempo, dalla tua parte.</p>
 
       <div className="sheet-row">
         <label className="field-label">Email</label>
