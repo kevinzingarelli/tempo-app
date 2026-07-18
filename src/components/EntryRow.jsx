@@ -3,19 +3,14 @@ import { fmtDuration, fmtTime, entrySeconds } from "../lib/format.js";
 import { IconPlay } from "../lib/icons.jsx";
 
 export default function EntryRow({ entry, onEdit }) {
-  const { projectById, clientById, startTimer } = useData();
+  const { projectById, clientById, startFromEntry } = useData();
   const project = projectById(entry.project_id);
   const client = project?.client_id ? clientById(project.client_id) : null;
   const secs = entrySeconds(entry);
 
   function restart(e) {
     e.stopPropagation();
-    startTimer({
-      description: entry.description,
-      project_id: entry.project_id,
-      tags: entry.tags || [],
-      billable: entry.billable || false,
-    });
+    startFromEntry(entry);
   }
 
   const sub = [

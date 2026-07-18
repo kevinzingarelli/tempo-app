@@ -13,7 +13,7 @@ export default function BottomNav({ tab, setTab, isAdmin }) {
     <nav className="bottom-nav">
       <div className="nav-brand">
         <img src="/icon-192.png" alt="" />
-        Kesia Time
+        Boschetto
       </div>
       {items.map(({ id, label, Icon }) => (
         <button

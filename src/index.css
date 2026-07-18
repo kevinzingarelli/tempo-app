@@ -1,25 +1,25 @@
 /* ============================================================
-   KESIA TIME — Design system
-   Sobrio e professionale. Accento indaco/blu aziendale.
+   BOSCHETTO — Design system
+   Sobrio e professionale. Accento verde bosco.
    Il timer in corso resta l'unico elemento "caldo" per
    distinguerlo a colpo d'occhio.
    ============================================================ */
 
 :root {
-  /* Superfici — grigi neutri, niente tinte calde */
-  --paper: #f5f6f8;
+  /* Superfici — grigi neutri con una leggerissima tinta verde */
+  --paper: #f4f6f4;
   --surface: #ffffff;
-  --surface-2: #fafbfc;
-  --ink: #14161c;
-  --ink-soft: #565b66;
-  --ink-faint: #9095a0;
-  --line: #e8eaee;
-  --line-strong: #d6d9e0;
+  --surface-2: #fafbfa;
+  --ink: #151a16;
+  --ink-soft: #565f58;
+  --ink-faint: #909a92;
+  --line: #e5eae5;
+  --line-strong: #d3dbd3;
 
-  /* Brand / azioni — indaco aziendale */
-  --brand: #4f46e5;
-  --brand-press: #4338ca;
-  --brand-soft: #eef0fe;
+  /* Brand / azioni — verde bosco */
+  --brand: #2f7d4f;
+  --brand-press: #266641;
+  --brand-soft: #e8f3ec;
 
   /* Caldo (stato "in corso") — corallo sobrio, meno acceso */
   --hot-a: #f97362;
@@ -28,7 +28,7 @@
 
   /* Semantici */
   --stop: #e0424b;
-  --ok: #12996b;
+  --ok: #2f7d4f;
   --warn: #c07f11;
 
   /* Forma — angoli un filo più stretti, aspetto meno "app giocosa" */
@@ -37,12 +37,12 @@
   --r-lg: 18px;
   --r-pill: 999px;
 
-  --shadow-sm: 0 1px 2px rgba(20, 22, 28, 0.05);
-  --shadow-md: 0 4px 16px rgba(20, 22, 28, 0.07);
-  --shadow-lg: 0 12px 32px rgba(20, 22, 28, 0.10);
+  --shadow-sm: 0 1px 2px rgba(20, 26, 22, 0.05);
+  --shadow-md: 0 4px 16px rgba(20, 26, 22, 0.07);
+  --shadow-lg: 0 12px 32px rgba(20, 26, 22, 0.10);
   --shadow-hot: 0 6px 22px rgba(239, 77, 91, 0.24);
 
-  --ring-track: rgba(79, 70, 229, 0.12);
+  --ring-track: rgba(47, 125, 79, 0.12);
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -671,7 +671,7 @@ h1, h2, h3 {
    ============================================================ */
 
 /* Anti-zoom e feel nativo su iOS */
-html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; touch-action: pan-x pan-y; }
 button, input, select, textarea, a, .list-action, .entry, .chip, .nav-btn {
   touch-action: manipulation;
 }
@@ -884,19 +884,19 @@ img { -webkit-user-drag: none; user-select: none; }
 :root { --ring-track: rgba(39, 38, 77, 0.10); }
 
 [data-theme="dark"] {
-  --paper: #0f1017;
-  --surface: #191a22;
-  --surface-2: #14151c;
-  --ink: #e7e8ee;            /* off-white, non bianco puro */
-  --ink-soft: #a0a3b0;
-  --ink-faint: #6d7180;
-  --line: #262835;
-  --line-strong: #363a4a;
-  --brand: #7c76ff;
-  --brand-press: #6a63f5;
-  --brand-soft: rgba(124, 118, 255, 0.14);
+  --paper: #0f1712;
+  --surface: #17201a;
+  --surface-2: #131b16;
+  --ink: #e6ece7;            /* off-white, non bianco puro */
+  --ink-soft: #9fada3;
+  --ink-faint: #6c7a70;
+  --line: #23302a;
+  --line-strong: #34433a;
+  --brand: #4fae7a;
+  --brand-press: #3f9a67;
+  --brand-soft: rgba(79, 174, 122, 0.14);
   --stop: #ff6069;
-  --ok: #2bcf8e;
+  --ok: #4fae7a;
   --warn: #e0a53a;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
@@ -905,7 +905,7 @@ img { -webkit-user-drag: none; user-select: none; }
   --ring-track: rgba(255, 255, 255, 0.10);
   color-scheme: dark;
 }
-[data-theme="dark"] .bottom-nav { background: rgba(15, 16, 23, 0.85); }
+[data-theme="dark"] .bottom-nav { background: rgba(15, 23, 18, 0.85); }
 [data-theme="dark"] .nav-btn.active { background: var(--brand-soft); }
 [data-theme="dark"] .segment { background: rgba(255, 255, 255, 0.07); }
 [data-theme="dark"] .segment button.active { background: #2a2a33; color: var(--ink); }
@@ -1183,3 +1183,100 @@ img { -webkit-user-drag: none; user-select: none; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .screen-head { margin-bottom: 18px; }
 .screen-sub { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; }
+
+/* Albero che cresce (home) */
+.growth-card { padding: 16px; margin-top: 12px; }
+.growth-top { display: flex; align-items: center; gap: 14px; }
+.growth-emoji { font-size: 34px; line-height: 1; flex-shrink: 0; }
+.growth-bar {
+  height: 9px;
+  border-radius: 5px;
+  background: var(--ring-track);
+  overflow: hidden;
+  margin-top: 12px;
+}
+.growth-fill {
+  height: 100%;
+  border-radius: 5px;
+  background: linear-gradient(90deg, #6fbf8e, var(--brand));
+  transition: width 0.6s ease;
+}
+
+/* Calendario ferie */
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.cal-head { margin-bottom: 6px; }
+.cal-wd { text-align: center; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-faint); }
+.cal-cell {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 9px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  border: 1.5px solid transparent;
+}
+.cal-cell.empty { background: transparent; }
+.cal-cell.open { background: var(--brand-soft); }
+.cal-cell.closed { background: rgba(224, 66, 75, 0.10); }
+.cal-cell.has-approved { outline: 2px solid #7fd0c2; outline-offset: -2px; }
+.cal-daynum { font-weight: 600; font-variant-numeric: tabular-nums; }
+.cal-cell.closed .cal-daynum { color: var(--stop); }
+.cal-badge { font-size: 11px; line-height: 1; margin-top: 2px; }
+.cal-team-dot {
+  position: absolute; bottom: 4px; right: 5px;
+  min-width: 15px; height: 15px; padding: 0 3px;
+  border-radius: 999px; background: var(--brand); color: #fff;
+  font-size: 9.5px; font-weight: 700; display: grid; place-items: center;
+}
+.cal-today-ring { position: absolute; inset: 2px; border: 2px solid var(--ink); border-radius: 8px; opacity: 0.5; pointer-events: none; }
+.cal-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; font-size: 12px; color: var(--ink-soft); }
+.cal-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.lg-dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.lg-red { background: rgba(224, 66, 75, 0.35); }
+.lg-green { background: var(--brand-soft); border: 1px solid var(--brand); }
+.lg-num { background: var(--brand); color: #fff; border-radius: 999px; width: 15px; height: 15px; font-size: 9px; font-weight: 700; display: grid; place-items: center; }
+
+/* Pulsante chiusura pannelli (fix "schermo bloccato" su iPhone) */
+.sheet { position: relative; }
+.sheet-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--line);
+  color: var(--ink-soft);
+  display: grid;
+  place-items: center;
+  z-index: 3;
+}
+.sheet-close:active { transform: scale(0.92); }
+.sheet-close svg { width: 17px; height: 17px; }
+
+/* Promemoria "timer aperto" all'avvio */
+.reminder-backdrop {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(15, 20, 16, 0.5);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; animation: fade 0.2s ease;
+}
+.reminder-card {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  padding: 24px 22px;
+  max-width: 380px; width: 100%;
+  text-align: center;
+  box-shadow: var(--shadow-lg);
+  animation: rise 0.24s ease;
+}
+.reminder-emoji { font-size: 40px; }
+.reminder-title { font-size: 19px; font-weight: 700; font-family: var(--font-display); margin-top: 8px; }
+.reminder-sub { font-size: 14px; color: var(--ink-soft); margin-top: 6px; }
+
+/* Nota settimanale del team */
+.team-note { padding: 16px; margin-top: 12px; border-left: 3px solid var(--brand); }
+.team-note-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand); }
+.team-note-text { font-size: 14px; line-height: 1.5; margin: 8px 0 0; color: var(--ink); white-space: pre-wrap; }

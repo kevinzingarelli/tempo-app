@@ -2,10 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../state/AuthContext.jsx";
 import { useData } from "../state/DataContext.jsx";
-import { IconPlus, IconCalendar } from "../lib/icons.jsx";
+import { IconPlus, IconCalendar, IconCheck } from "../lib/icons.jsx";
 
 function isoToday() {
   const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+function toISO(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 function fmtRange(a, b) {
@@ -18,101 +21,196 @@ function fmtRange(a, b) {
 function daysBetween(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000) + 1;
 }
+function friendlyError(e) {
+  const msg = (e?.message || "").toLowerCase();
+  const code = e?.code || "";
+  if (msg.includes("does not exist") || code === "42p01") {
+    return "Il database non è ancora aggiornato per le ferie: manca lo script SQL. Chiedi a chi gestisce l'app di eseguirlo su Supabase.";
+  }
+  if (code === "42501" || msg.includes("row-level security") || msg.includes("not authorized")) {
+    return "Operazione non consentita per il tuo ruolo.";
+  }
+  if (msg.includes("duplicate")) return "Esiste già una voce per questa data.";
+  return "Operazione non riuscita: " + (e?.message || "riprova");
+}
+
+function nationalHolidays(year) {
+  return [
+    { day: `${year}-01-01`, label: "Capodanno" },
+    { day: `${year}-01-06`, label: "Epifania" },
+    { day: `${year}-04-25`, label: "Festa della Liberazione" },
+    { day: `${year}-05-01`, label: "Festa dei Lavoratori" },
+    { day: `${year}-06-02`, label: "Festa della Repubblica" },
+    { day: `${year}-08-15`, label: "Ferragosto" },
+    { day: `${year}-11-01`, label: "Ognissanti" },
+    { day: `${year}-12-08`, label: "Immacolata Concezione" },
+    { day: `${year}-12-25`, label: "Natale" },
+    { day: `${year}-12-26`, label: "Santo Stefano" },
+  ];
+}
+
 const STATUS = {
   pending: { label: "In attesa", color: "var(--warn)", bg: "rgba(192,127,17,0.14)" },
-  approved: { label: "Approvata", color: "var(--ok)", bg: "rgba(18,153,107,0.14)" },
+  approved: { label: "Approvata", color: "var(--ok)", bg: "rgba(47,125,79,0.14)" },
   rejected: { label: "Rifiutata", color: "var(--stop)", bg: "rgba(224,66,75,0.14)" },
 };
 
+const WEEKDAYS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+
 export default function TimeOff() {
-  const { user, isAdmin, profile } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { toast } = useData();
   const [mine, setMine] = useState([]);
   const [allReq, setAllReq] = useState([]);
   const [people, setPeople] = useState({});
   const [closures, setClosures] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [month, setMonth] = useState(() => { const d = new Date(); d.setDate(1); return d; });
 
-  // form richiesta
   const [start, setStart] = useState(isoToday());
   const [end, setEnd] = useState(isoToday());
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
 
-  // form giorno rosso (admin)
   const [cDay, setCDay] = useState(isoToday());
   const [cLabel, setCLabel] = useState("");
+  const [addingHoliday, setAddingHoliday] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [mineRes, closRes] = await Promise.all([
-      supabase.from("time_off").select("*").eq("user_id", user.id).order("start_date", { ascending: false }),
-      supabase.from("closures").select("*").order("day", { ascending: true }),
-    ]);
-    setMine(mineRes.data || []);
-    setClosures(closRes.data || []);
-    if (isAdmin) {
-      const [allRes, profRes] = await Promise.all([
-        supabase.from("time_off").select("*").order("created_at", { ascending: false }),
-        supabase.from("profiles").select("id, name"),
+    try {
+      const [mineRes, closRes] = await Promise.all([
+        supabase.from("time_off").select("*").eq("user_id", user.id).order("start_date", { ascending: false }),
+        supabase.from("closures").select("*").order("day", { ascending: true }),
       ]);
-      setAllReq(allRes.data || []);
-      const m = {};
-      (profRes.data || []).forEach((p) => (m[p.id] = p.name || "Senza nome"));
-      setPeople(m);
+      if (mineRes.error) throw mineRes.error;
+      if (closRes.error) throw closRes.error;
+      setMine(mineRes.data || []);
+      setClosures(closRes.data || []);
+      if (isAdmin) {
+        const [allRes, profRes] = await Promise.all([
+          supabase.from("time_off").select("*").order("created_at", { ascending: false }),
+          supabase.from("profiles").select("id, name"),
+        ]);
+        setAllReq(allRes.data || []);
+        const m = {};
+        (profRes.data || []).forEach((p) => (m[p.id] = p.name || "Senza nome"));
+        setPeople(m);
+      }
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [user, isAdmin]);
+  }, [user, isAdmin, toast]);
 
   useEffect(() => { load(); }, [load]);
 
   async function sendRequest() {
     if (end < start) { toast("La data di fine è prima dell'inizio.", "error"); return; }
     setSending(true);
-    const { error } = await supabase.from("time_off").insert({
-      user_id: user.id, start_date: start, end_date: end, note: note.trim() || null,
-    });
-    setSending(false);
-    if (error) { toast("Invio non riuscito: " + error.message, "error"); return; }
-    toast("Richiesta inviata. Ora attende l'approvazione.", "ok");
-    setNote("");
-    load();
+    try {
+      const { error } = await supabase.from("time_off").insert({
+        user_id: user.id, start_date: start, end_date: end, note: note.trim() || null,
+      });
+      if (error) throw error;
+      toast("Richiesta inviata. Ora attende l'approvazione.", "ok");
+      setNote("");
+      load();
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    } finally {
+      setSending(false);
+    }
   }
 
   async function cancelMine(id) {
-    const { error } = await supabase.from("time_off").delete().eq("id", id);
-    if (error) { toast("Non è stato possibile annullare.", "error"); return; }
-    toast("Richiesta annullata.", "ok");
-    load();
+    try {
+      const { error } = await supabase.from("time_off").delete().eq("id", id);
+      if (error) throw error;
+      toast("Richiesta annullata.", "ok");
+      load();
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    }
   }
 
   async function decide(req, status) {
-    const { error } = await supabase
-      .from("time_off")
-      .update({ status, decided_by: user.id, decided_at: new Date().toISOString() })
-      .eq("id", req.id);
-    if (error) { toast("Operazione non riuscita: " + error.message, "error"); return; }
-    toast(status === "approved" ? "Ferie approvate." : "Richiesta rifiutata.", "ok");
-    load();
+    try {
+      const { error } = await supabase
+        .from("time_off")
+        .update({ status, decided_by: user.id, decided_at: new Date().toISOString() })
+        .eq("id", req.id);
+      if (error) throw error;
+      toast(status === "approved" ? "Ferie approvate." : "Richiesta rifiutata.", "ok");
+      load();
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    }
   }
 
-  async function addClosure() {
-    if (!cLabel.trim()) { toast("Dai un nome al giorno rosso (es. Natale).", "error"); return; }
-    const { error } = await supabase.from("closures").upsert({ day: cDay, label: cLabel.trim() }, { onConflict: "day" });
-    if (error) { toast("Non è stato possibile aggiungere: " + error.message, "error"); return; }
-    toast("Giorno rosso aggiunto.", "ok");
-    setCLabel("");
-    load();
+  async function addClosure(day, label) {
+    if (!label?.trim()) { toast("Dai un nome al giorno rosso (es. Natale).", "error"); return; }
+    try {
+      const { error } = await supabase.from("closures").upsert({ day, label: label.trim() }, { onConflict: "day" });
+      if (error) throw error;
+      toast("Giorno rosso aggiunto.", "ok");
+      setCLabel("");
+      load();
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    }
   }
 
   async function removeClosure(id) {
-    const { error } = await supabase.from("closures").delete().eq("id", id);
-    if (error) { toast("Non è stato possibile rimuovere.", "error"); return; }
-    load();
+    try {
+      const { error } = await supabase.from("closures").delete().eq("id", id);
+      if (error) throw error;
+      load();
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    }
   }
 
   const pending = allReq.filter((r) => r.status === "pending");
   const decided = allReq.filter((r) => r.status !== "pending");
+
+  const closureDays = new Set(closures.map((c) => c.day));
+  const proposedHolidays = [...nationalHolidays(month.getFullYear()), ...nationalHolidays(month.getFullYear() + 1)]
+    .filter((h) => !closureDays.has(h.day) && h.day >= isoToday())
+    .slice(0, 6);
+
+  const year = month.getFullYear();
+  const mIdx = month.getMonth();
+  const firstOfMonth = new Date(year, mIdx, 1);
+  const startOffset = (firstOfMonth.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, mIdx + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, mIdx, d));
+
+  function closureFor(dateObj) {
+    if (!dateObj) return null;
+    const iso = toISO(dateObj);
+    const wd = dateObj.getDay();
+    if (wd === 0 || wd === 6) return { label: "Weekend" };
+    return closures.find((c) => c.day === iso) || null;
+  }
+  function myStatusFor(dateObj) {
+    if (!dateObj) return null;
+    const iso = toISO(dateObj);
+    return mine.find((r) => iso >= r.start_date && iso <= r.end_date) || null;
+  }
+  function teamApprovedCount(dateObj) {
+    if (!dateObj || !isAdmin) return 0;
+    const iso = toISO(dateObj);
+    return allReq.filter((r) => r.status === "approved" && iso >= r.start_date && iso <= r.end_date).length;
+  }
+
+  function shiftMonth(delta) {
+    setMonth(new Date(year, mIdx + delta, 1));
+  }
+  const isCurMonth = year === new Date().getFullYear() && mIdx === new Date().getMonth();
 
   if (loading)
     return (
@@ -125,13 +223,64 @@ export default function TimeOff() {
     <div className="screen">
       <div className="screen-head">
         <div className="screen-title">Ferie</div>
-        <div className="screen-sub">Richiedi i giorni liberi e vedi le chiusure</div>
+        <div className="screen-sub">Calendario aziendale, richieste e chiusure</div>
       </div>
 
-      {/* Admin: richieste da approvare */}
+      <div className="admin-wide">
+      <div>
+      <div className="week-nav">
+        <button className="week-arrow" onClick={() => shiftMonth(-1)} aria-label="Mese precedente">‹</button>
+        <div className="w-label" style={{ textTransform: "capitalize" }}>
+          {month.toLocaleDateString("it-IT", { month: "long", year: "numeric" })}
+        </div>
+        <button className="week-arrow" onClick={() => shiftMonth(1)} aria-label="Mese successivo">›</button>
+      </div>
+      {!isCurMonth && (
+        <button className="btn btn-ghost btn-sm" style={{ marginBottom: 10 }} onClick={() => setMonth(() => { const d = new Date(); d.setDate(1); return d; })}>
+          Torna a oggi
+        </button>
+      )}
+
+      <div className="card" style={{ padding: 14 }}>
+        <div className="cal-grid cal-head">
+          {WEEKDAYS.map((w) => <div key={w} className="cal-wd">{w}</div>)}
+        </div>
+        <div className="cal-grid">
+          {cells.map((d, i) => {
+            if (!d) return <div key={i} className="cal-cell empty" />;
+            const clo = closureFor(d);
+            const my = myStatusFor(d);
+            const teamCount = teamApprovedCount(d);
+            const today = toISO(d) === isoToday();
+            let cls = "cal-cell";
+            cls += clo ? " closed" : " open";
+            if (my?.status === "approved") cls += " has-approved";
+            return (
+              <div key={i} className={cls} title={clo?.label || (my ? STATUS[my.status]?.label : "Aperto")}>
+                {today && <span className="cal-today-ring" />}
+                <span className="cal-daynum">{d.getDate()}</span>
+                {my?.status === "pending" && <span className="cal-badge">🏖️⏳</span>}
+                {my?.status === "approved" && <span className="cal-badge">🥚</span>}
+                {teamCount > 0 && !my && <span className="cal-team-dot">{teamCount}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="cal-legend">
+        <span><span className="lg-dot lg-red" /> Chiuso (weekend / festa)</span>
+        <span><span className="lg-dot lg-green" /> Aperto</span>
+        <span>🏖️⏳ Tua richiesta in attesa</span>
+        <span>🥚 Ferie approvate</span>
+        {isAdmin && <span><span className="lg-dot lg-num">N</span> Persone in ferie quel giorno</span>}
+      </div>
+      </div>
+
+      <div>
       {isAdmin && (
         <>
-          <div className="section-label">Da approvare {pending.length > 0 && `(${pending.length})`}</div>
+          <div className="section-label" style={{ marginTop: 0 }}>Da approvare {pending.length > 0 && `(${pending.length})`}</div>
           {pending.length === 0 ? (
             <div className="empty" style={{ padding: 22 }}>Nessuna richiesta in attesa.</div>
           ) : (
@@ -153,11 +302,35 @@ export default function TimeOff() {
               ))}
             </div>
           )}
+
+          <div className="section-label">Festività da approvare come chiusura</div>
+          {proposedHolidays.length === 0 ? (
+            <div className="empty" style={{ padding: 22 }}>Nessuna proposta al momento.</div>
+          ) : (
+            <div className="card">
+              {proposedHolidays.map((h) => (
+                <div key={h.day} className="list-action">
+                  <span>
+                    <span style={{ fontWeight: 600, display: "block" }}>{h.label}</span>
+                    <span className="muted" style={{ fontSize: 12.5 }}>
+                      {new Date(h.day + "T00:00:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                    </span>
+                  </span>
+                  <button
+                    className="btn btn-soft btn-sm"
+                    disabled={addingHoliday === h.day}
+                    onClick={async () => { setAddingHoliday(h.day); await addClosure(h.day, h.label); setAddingHoliday(null); }}
+                  >
+                    <IconCheck style={{ width: 15, height: 15 }} /> Approva
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
 
-      {/* La mia richiesta */}
-      <div className="section-label">Nuova richiesta</div>
+      <div className="section-label" style={{ marginTop: isAdmin ? 26 : 0 }}>Nuova richiesta</div>
       <div className="card" style={{ padding: 16 }}>
         <div className="grid-2">
           <div>
@@ -181,7 +354,6 @@ export default function TimeOff() {
         </button>
       </div>
 
-      {/* Le mie richieste */}
       {mine.length > 0 && (
         <>
           <div className="section-label">Le mie richieste</div>
@@ -211,8 +383,7 @@ export default function TimeOff() {
         </>
       )}
 
-      {/* Giorni rossi comuni */}
-      <div className="section-label">Giorni di chiusura</div>
+      <div className="section-label">Giorni di chiusura fissi</div>
       <div className="card" style={{ padding: "6px 14px" }}>
         <div className="row-between" style={{ padding: "9px 0", borderBottom: closures.length ? "1px solid var(--line)" : "none" }}>
           <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -245,21 +416,19 @@ export default function TimeOff() {
         )}
       </div>
 
-      {/* Admin: aggiungi giorno rosso */}
       {isAdmin && (
         <div className="card" style={{ padding: 16, marginTop: 12 }}>
-          <label className="field-label">Aggiungi un giorno rosso</label>
+          <label className="field-label">Aggiungi un giorno rosso manuale</label>
           <div className="grid-2" style={{ marginTop: 2 }}>
             <input type="date" className="field" value={cDay} onChange={(e) => setCDay(e.target.value)} />
-            <input className="field" placeholder="Es. Natale" value={cLabel} onChange={(e) => setCLabel(e.target.value)} />
+            <input className="field" placeholder="Es. Chiusura estiva" value={cLabel} onChange={(e) => setCLabel(e.target.value)} />
           </div>
-          <button className="btn btn-soft btn-block" style={{ marginTop: 10 }} onClick={addClosure}>
+          <button className="btn btn-soft btn-block" style={{ marginTop: 10 }} onClick={() => addClosure(cDay, cLabel)}>
             <IconCalendar style={{ width: 16, height: 16 }} /> Segna come chiusura
           </button>
         </div>
       )}
 
-      {/* Admin: storico decisioni */}
       {isAdmin && decided.length > 0 && (
         <>
           <div className="section-label">Richieste gestite</div>
@@ -281,6 +450,8 @@ export default function TimeOff() {
           </div>
         </>
       )}
+      </div>
+      </div>
     </div>
   );
 }

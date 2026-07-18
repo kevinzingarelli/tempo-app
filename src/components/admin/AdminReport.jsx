@@ -43,6 +43,8 @@ export default function AdminReport() {
   const [gridWeek, setGridWeek] = useState(() => startOfWeek());
   const [loading, setLoading] = useState(true);
   const [editEntry, setEditEntry] = useState(null);
+  const [lockUntil, setLockUntil] = useState(null);
+  const [lockDraft, setLockDraft] = useState("");
   const [selected, setSelected] = useState(new Set());
   const [bulkPicker, setBulkPicker] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -87,10 +89,13 @@ export default function AdminReport() {
     setLoading(true);
     const from = new Date(fromDate + "T00:00:00");
     const to = new Date(toDate + "T23:59:59");
+    // periodo precedente comparabile (stessa durata, subito prima)
+    const periodMs = to.getTime() - from.getTime();
+    const prevStart = new Date(from.getTime() - periodMs - 86400000);
     // per la griglia serve anche la settimana selezionata
     const gridEnd = new Date(gridWeek);
     gridEnd.setDate(gridEnd.getDate() + 7);
-    const minFrom = new Date(Math.min(from.getTime(), gridWeek.getTime()));
+    const minFrom = new Date(Math.min(from.getTime(), gridWeek.getTime(), prevStart.getTime()));
     const maxTo = new Date(Math.max(to.getTime(), gridEnd.getTime()));
 
     const [{ data: profs }, { data: ent }] = await Promise.all([
@@ -114,6 +119,22 @@ export default function AdminReport() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Blocco periodo (voci fino a una data non più modificabili dai dipendenti)
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("time_lock").select("locked_until").maybeSingle();
+      setLockUntil(data?.locked_until || null);
+      setLockDraft(data?.locked_until || "");
+    })();
+  }, []);
+
+  async function saveLock(value) {
+    const { error } = await supabase.from("time_lock").upsert({ id: true, locked_until: value || null });
+    if (error) { toast("Non è stato possibile aggiornare il blocco.", "error"); return; }
+    setLockUntil(value || null);
+    toast(value ? "Periodo bloccato." : "Blocco rimosso.", "ok");
+  }
 
   const from = new Date(fromDate + "T00:00:00");
   const to = new Date(toDate + "T23:59:59");
@@ -139,6 +160,65 @@ export default function AdminReport() {
   const userRows = Object.entries(byUser)
     .map(([id, secs]) => ({ id, name: people[id] || "—", secs }))
     .sort((a, b) => b.secs - a.secs);
+
+  // ---- Confronto per persona vs periodo precedente (a pari giorni trascorsi) ----
+  const DAY = 86400000;
+  const periodDays = Math.max(1, Math.round((to - from) / DAY) + 1);
+  const today = new Date();
+  const elapsedDays = Math.min(
+    periodDays,
+    Math.max(1, Math.round((Math.min(to.getTime(), today.getTime()) - from.getTime()) / DAY) + 1)
+  );
+  // finestra "corrente" limitata ai giorni trascorsi
+  const curWinEnd = new Date(from.getTime() + elapsedDays * DAY);
+  // finestra "precedente": stessa durata, subito prima del periodo
+  const prevStart = new Date(from.getTime() - periodDays * DAY);
+  const prevWinEnd = new Date(prevStart.getTime() + elapsedDays * DAY);
+
+  function inWin(e, a, b) {
+    const d = new Date(e.started_at);
+    if (d < a || d >= b) return false;
+    if (userFilter !== "all" && e.user_id !== userFilter) return false;
+    if (projFilter !== "all" && e.project_id !== projFilter) return false;
+    if (clientFilter !== "all") {
+      const p = projectById(e.project_id);
+      if ((p?.client_id || "none") !== clientFilter) return false;
+    }
+    return true;
+  }
+  const curByUser = {}, prevByUser = {};
+  for (const e of rows) {
+    if (inWin(e, from, curWinEnd)) curByUser[e.user_id] = (curByUser[e.user_id] || 0) + entrySeconds(e);
+    if (inWin(e, prevStart, prevWinEnd)) prevByUser[e.user_id] = (prevByUser[e.user_id] || 0) + entrySeconds(e);
+  }
+  const compareRows = peopleList
+    .filter((p) => p.active !== false || curByUser[p.id] || prevByUser[p.id])
+    .map((p) => {
+      const cur = curByUser[p.id] || 0;
+      const prev = prevByUser[p.id] || 0;
+      const pct = prev > 0 ? ((cur - prev) / prev) * 100 : null;
+      return { id: p.id, name: p.name || "Senza nome", cur, prev, pct };
+    })
+    .filter((r) => r.cur > 0 || r.prev > 0)
+    .sort((a, b) => b.cur - a.cur);
+
+  function exportCompareCSV() {
+    const head = ["Persona", "Ore periodo", "Ore periodo prec.", "Variazione %"];
+    const lines = compareRows.map((r) =>
+      [
+        r.name,
+        (r.cur / 3600).toFixed(2).replace(".", ","),
+        (r.prev / 3600).toFixed(2).replace(".", ","),
+        r.pct == null ? "—" : (r.pct >= 0 ? "+" : "") + r.pct.toFixed(0) + "%",
+      ].join(";")
+    );
+    const csv = [head.join(";"), ...lines].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `confronto-persone-${dayKey(new Date())}.csv`;
+    a.click();
+  }
 
   // riepilogo per progetto
   const byProj = {};
@@ -365,6 +445,30 @@ export default function AdminReport() {
 
       {view === "list" && (
       <>
+      <div className="card" style={{ padding: 14, marginBottom: 12 }}>
+        <div className="row-between" style={{ alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 600 }}>Blocco voci approvate</div>
+            <div className="muted" style={{ fontSize: 12.5 }}>
+              {lockUntil
+                ? `Le voci fino al ${new Date(lockUntil + "T00:00:00").toLocaleDateString("it-IT")} non sono più modificabili dai dipendenti.`
+                : "Nessun blocco attivo. Puoi chiudere i periodi già verificati."}
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+          <input type="date" className="field" style={{ flex: "1 1 160px" }} value={lockDraft} onChange={(e) => setLockDraft(e.target.value)} />
+          <button className="btn btn-primary btn-sm" onClick={() => saveLock(lockDraft)} disabled={!lockDraft}>
+            Blocca fino a questa data
+          </button>
+          {lockUntil && (
+            <button className="btn btn-ghost btn-sm" onClick={() => { setLockDraft(""); saveLock(null); }}>
+              Rimuovi blocco
+            </button>
+          )}
+        </div>
+      </div>
+
       <div className="segment" style={{ marginBottom: 10 }}>
         <button className={period === "week" ? "active" : ""} onClick={() => setQuickPeriod("week")}>
           Settimana
@@ -440,6 +544,51 @@ export default function AdminReport() {
           >
             <IconDownload style={{ width: 17, height: 17 }} /> Esporta CSV
           </button>
+
+          {/* Confronto per persona vs periodo precedente */}
+          {compareRows.length > 0 && (
+            <>
+              <div className="row-between" style={{ alignItems: "center" }}>
+                <div className="section-label" style={{ margin: 0 }}>Confronto per persona</div>
+                <button className="btn btn-ghost btn-sm" onClick={exportCompareCSV}>
+                  <IconDownload style={{ width: 15, height: 15 }} /> CSV
+                </button>
+              </div>
+              <p className="muted" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>
+                Confronto sui primi {elapsedDays} {elapsedDays === 1 ? "giorno" : "giorni"} del periodo, a parità di giorni trascorsi rispetto al periodo precedente.
+              </p>
+              <div className="card grid-wrap">
+                <table className="wgrid">
+                  <thead>
+                    <tr>
+                      <th>Persona</th>
+                      <th className="tot">Periodo</th>
+                      <th className="tot">Precedente</th>
+                      <th className="tot">Var.</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {compareRows.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.name}</td>
+                        <td className="tot">{fmtDuration(r.cur)}</td>
+                        <td>{fmtDuration(r.prev)}</td>
+                        <td className="tot">
+                          {r.pct == null ? (
+                            <span className="muted">nuovo</span>
+                          ) : (
+                            <span style={{ color: r.pct >= 0 ? "var(--ok)" : "var(--stop)", fontWeight: 700 }}>
+                              {r.pct >= 0 ? "▲" : "▼"} {Math.abs(Math.round(r.pct))}%
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
 
           {/* riepilogo per persona (solo in vista "tutte") */}
           {!detail && (

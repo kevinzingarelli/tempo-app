@@ -33,10 +33,10 @@ export default function Login() {
         className="login-logo"
         style={{ display: "grid", placeItems: "center", overflow: "hidden" }}
       >
-        <img src="/icon-192.png" alt="Kesia Time" style={{ width: "100%", height: "100%" }} />
+        <img src="/icon-192.png" alt="Boschetto" style={{ width: "100%", height: "100%" }} />
       </div>
-      <h1 className="login-h">Kesia Time</h1>
-      <p className="login-p">Il tempo del team, sotto controllo.</p>
+      <h1 className="login-h">Boschetto</h1>
+      <p className="login-p">Il tuo tempo che cresce, un albero alla volta.</p>
 
       <div className="sheet-row">
         <label className="field-label">Email</label>

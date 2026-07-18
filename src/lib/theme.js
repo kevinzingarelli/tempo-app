@@ -1,5 +1,5 @@
 // Gestione tema: "auto" (segue il sistema), "light", "dark".
-const KEY = "kesiatime_theme";
+const KEY = "boschetto_theme";
 
 export function getThemePref() {
   return localStorage.getItem(KEY) || "auto";

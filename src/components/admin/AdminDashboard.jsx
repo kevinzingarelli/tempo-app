@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { useData } from "../../state/DataContext.jsx";
-import { ProgressRing, Donut, MiniBars, HBar } from "../Charts.jsx";
+import { ProgressRing, Donut, MiniBars, HBar, LineChart } from "../Charts.jsx";
 import {
   entrySeconds, fmtDuration, startOfWeek, startOfMonth, dayKey,
 } from "../../lib/format.js";
@@ -57,7 +57,7 @@ function openInvoicePDF(companyName, client, period, from) {
     <tbody>${rows}</tbody>
     <tfoot><tr><td>Totale</td><td class="r">${fmtH(client.billSecs)}</td><td class="r">${eur(client.rev)}</td></tr></tfoot>
   </table>
-  <div class="foot">Generato da Kesia Time il ${new Date().toLocaleDateString("it-IT")}. Documento riepilogativo, non fiscale.</div>
+  <div class="foot">Generato da Boschetto il ${new Date().toLocaleDateString("it-IT")}. Documento riepilogativo, non fiscale.</div>
   <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
 </body></html>`;
   const w = window.open("", "_blank");
@@ -211,6 +211,21 @@ export default function AdminDashboard() {
   const billRows = clientRows.filter((r) => r.billSecs > 0);
   const totalToInvoice = billRows.reduce((s, r) => s + r.rev, 0);
 
+  // Torta ore per progetto (top 6 + "Altri")
+  const PIE_COLORS = ["#2f7d4f", "#3b6ef5", "#e5a300", "#ff8a3d", "#e5484d", "#b14bd8", "#6b7280"];
+  const projRowsSorted = Object.entries(byProject)
+    .map(([id, v]) => ({ id, name: id === "none" ? "Senza progetto" : (projectById(id)?.name || "—"), secs: v.secs, color: id !== "none" ? projectById(id)?.color : "#9aa0a6" }))
+    .sort((a, b) => b.secs - a.secs);
+  const pieTop = projRowsSorted.slice(0, 6);
+  const pieOthers = projRowsSorted.slice(6).reduce((s, r) => s + r.secs, 0);
+  const pieSegments = [
+    ...pieTop.map((r, i) => ({ value: r.secs, color: r.color || PIE_COLORS[i % PIE_COLORS.length], name: r.name })),
+    ...(pieOthers > 0 ? [{ value: pieOthers, color: "#c4c8cc", name: "Altri" }] : []),
+  ];
+
+  // Fatturabile vs non
+  const nonBillableSecs = totalSecs - billableSecs;
+
   const marginColor = margin == null ? "var(--ink)" : margin >= 30 ? "var(--ok)" : margin >= 15 ? "var(--warn)" : "var(--stop)";
 
   return (
@@ -284,11 +299,74 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Tendenza */}
-      <div className="section-label">Tendenza — ultime 8 settimane</div>
-      <div className="card" style={{ padding: "16px 12px 10px" }}>
-        <MiniBars data={weekBuckets} height={110} color="var(--brand)" formatValue={(v) => v + "h"} />
+      {/* Tendenza a linea */}
+      <div className="section-label">Andamento — ultime 8 settimane</div>
+      <div className="card" style={{ padding: "16px 14px 10px" }}>
+        <LineChart
+          points={weekBuckets.map((b) => b.value)}
+          labels={weekBuckets.map((b) => b.label)}
+          color="var(--brand)"
+          height={150}
+        />
       </div>
+
+      {/* Torta ore per progetto */}
+      {pieSegments.length > 0 && totalSecs > 0 && (
+        <>
+          <div className="section-label">Ripartizione ore per progetto</div>
+          <div className="card admin-wide" style={{ padding: 18, alignItems: "center", gap: 20 }}>
+            <div style={{ display: "grid", placeItems: "center" }}>
+              <Donut segments={pieSegments} size={150} stroke={22} centerTop={fmtDuration(totalSecs)} centerBottom="totali" />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {pieSegments.map((s, i) => (
+                <div key={i} className="row-between" style={{ fontSize: 13.5 }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+                    <span className="entry-dot" style={{ background: s.color }} />
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</span>
+                  </span>
+                  <span className="muted" style={{ flexShrink: 0 }}>
+                    {fmtDuration(s.value)} · {Math.round((s.value / totalSecs) * 100)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Fatturabile vs non fatturabile */}
+      {totalSecs > 0 && (
+        <>
+          <div className="section-label">Ore fatturabili vs non fatturabili</div>
+          <div className="card" style={{ padding: 18, display: "flex", alignItems: "center", gap: 20 }}>
+            <Donut
+              segments={[
+                { value: billableSecs, color: "var(--ok)" },
+                { value: nonBillableSecs, color: "#c4c8cc" },
+              ]}
+              size={130}
+              stroke={20}
+              centerTop={`${Math.round(billablePct)}%`}
+              centerBottom="fatturabile"
+            />
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div className="row-between" style={{ fontSize: 14 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                  <span className="entry-dot" style={{ background: "var(--ok)" }} /> Fatturabili
+                </span>
+                <span className="entry-dur">{fmtDuration(billableSecs)}</span>
+              </div>
+              <div className="row-between" style={{ fontSize: 14 }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                  <span className="entry-dot" style={{ background: "#c4c8cc" }} /> Non fatturabili
+                </span>
+                <span className="entry-dur">{fmtDuration(nonBillableSecs)}</span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Redditività per cliente */}
       <div className="section-label">Redditività per cliente</div>

@@ -1,8 +1,26 @@
 // Novità dell'app, dalla più recente. short = etichetta versione.
-export const CURRENT_VERSION = "8";
-export const APP_NAME = "Kesia Time";
+export const CURRENT_VERSION = "9";
+export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "9",
+    date: "2026-07-18",
+    title: "Boschetto",
+    items: [
+      "Nuovo nome e identità: Boschetto, con colori verde bosco",
+      "Albero dei progressi personale sulla home (attivabile dal profilo)",
+      "Ferie con calendario mensile, festività italiane pre-proposte e stati colorati",
+      "Correzione del blocco schermo su iPhone: pulsante di chiusura su ogni pannello",
+      "Zoom della pagina disattivato per un uso più stabile",
+      "Avviso all'apertura se hai un timer ancora aperto",
+      "Nota della settimana scritta dagli admin, visibile a tutti",
+      "Report admin più ricchi: torta per progetto, andamento a linea, fatturabili vs no",
+      "Tabella per persona con confronto onesto rispetto al periodo precedente",
+      "Admin: crea un progetto al volo mentre registri, e blocca i periodi già verificati",
+      "Continua un lavoro recente con un tocco",
+    ],
+  },
   {
     version: "8",
     date: "2026-07-18",

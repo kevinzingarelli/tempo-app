@@ -124,7 +124,7 @@ export default function PersonalStats() {
             </div>
             <div className="muted" style={{ fontSize: 12.5, marginTop: 5 }}>
               {goalPct >= 100
-                ? "Obiettivo raggiunto 🎉"
+                ? "Obiettivo settimanale completato"
                 : `Te ne mancano ${fmtDuration(Math.max(0, goalH * 3600 - weekSecs))}`}
             </div>
           </div>

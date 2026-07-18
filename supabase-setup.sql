@@ -270,6 +270,68 @@ create policy closures_all on public.closures
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- ============================================================
+--  NOTE SETTIMANALI ADMIN + BLOCCO PERIODI (aggiunto in Boschetto)
+--  Non distruttivo: crea solo se non esiste.
+-- ============================================================
+
+create table if not exists public.team_notes (
+  id uuid primary key default gen_random_uuid(),
+  week_start date not null unique,
+  content text not null default '',
+  updated_by uuid references auth.users(id),
+  updated_at timestamptz default now()
+);
+alter table public.team_notes enable row level security;
+
+drop policy if exists team_notes_select on public.team_notes;
+create policy team_notes_select on public.team_notes
+  for select using (auth.uid() is not null);
+
+drop policy if exists team_notes_all on public.team_notes;
+create policy team_notes_all on public.team_notes
+  for all using (public.is_admin()) with check (public.is_admin());
+
+-- Riga unica: data fino a cui le voci sono "chiuse" (approvate).
+-- I dipendenti non possono più modificarle/eliminarle; l'admin sì.
+create table if not exists public.time_lock (
+  id boolean primary key default true,
+  locked_until date,
+  constraint time_lock_single_row check (id = true)
+);
+alter table public.time_lock enable row level security;
+
+drop policy if exists time_lock_select on public.time_lock;
+create policy time_lock_select on public.time_lock
+  for select using (auth.uid() is not null);
+
+drop policy if exists time_lock_all on public.time_lock;
+create policy time_lock_all on public.time_lock
+  for all using (public.is_admin()) with check (public.is_admin());
+
+insert into public.time_lock (id, locked_until) values (true, null)
+  on conflict (id) do nothing;
+
+-- Le policy di time_entries ora rispettano il blocco: il proprietario
+-- può modificare/eliminare solo le voci NON ancora bloccate; l'admin sempre.
+drop policy if exists entries_update on public.time_entries;
+create policy entries_update on public.time_entries
+  for update using (
+    public.is_admin()
+    or (user_id = auth.uid() and started_at::date > coalesce((select locked_until from public.time_lock limit 1), '1900-01-01'::date))
+  )
+  with check (
+    public.is_admin()
+    or (user_id = auth.uid() and started_at::date > coalesce((select locked_until from public.time_lock limit 1), '1900-01-01'::date))
+  );
+
+drop policy if exists entries_delete on public.time_entries;
+create policy entries_delete on public.time_entries
+  for delete using (
+    public.is_admin()
+    or (user_id = auth.uid() and started_at::date > coalesce((select locked_until from public.time_lock limit 1), '1900-01-01'::date))
+  );
+
+-- ============================================================
 --  FATTO. Database pronto e sicuro.
 --
 --  ULTIMO PASSO — diventare amministratore:

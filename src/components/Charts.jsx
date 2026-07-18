@@ -185,3 +185,45 @@ export function HBar({ label, value, max, color = "var(--brand)", valueLabel, on
     </div>
   );
 }
+
+// Grafico a linea per andamenti (es. ore per settimana)
+export function LineChart({ points = [], height = 140, color = "var(--brand)", formatValue, labels = [] }) {
+  if (points.length === 0) return null;
+  const max = Math.max(1, ...points);
+  const w = 300;
+  const h = height;
+  const padY = 16;
+  const stepX = points.length > 1 ? w / (points.length - 1) : 0;
+  const coords = points.map((p, i) => {
+    const x = i * stepX;
+    const y = h - padY - (p / max) * (h - padY * 2);
+    return [x, y];
+  });
+  const path = coords.map(([x, y], i) => (i === 0 ? `M${x},${y}` : `L${x},${y}`)).join(" ");
+  const area = `${path} L${coords[coords.length - 1][0]},${h} L0,${h} Z`;
+
+  return (
+    <div style={{ width: "100%" }}>
+      <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="lc-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.22" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#lc-grad)" />
+        <path d={path} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {coords.map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r="3.2" fill={color} />
+        ))}
+      </svg>
+      {labels.length > 0 && (
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+          {labels.map((l, i) => (
+            <span key={i} style={{ fontSize: 10.5, color: "var(--ink-faint)", fontWeight: 600 }}>{l}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

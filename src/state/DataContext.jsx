@@ -512,6 +512,21 @@ export function DataProvider({ children }) {
     [projects, startTimer, toast]
   );
 
+  // "Continua" un lavoro passato con un tap: riusa progetto e descrizione.
+  const startFromEntry = useCallback(
+    async (entry) => {
+      const proj = projects.find((p) => p.id === entry.project_id);
+      await startTimer({
+        description: entry.description || "",
+        project_id: entry.project_id || null,
+        tags: entry.tags || [],
+        billable: entry.billable ?? proj?.billable_default ?? false,
+      });
+      toast("Timer avviato", "ok");
+    },
+    [projects, startTimer, toast]
+  );
+
   // ---------- Progetti (admin) ----------
   // Gestione progetti/clienti/tariffe: azioni admin che richiedono connessione.
   const addProject = useCallback(
@@ -539,6 +554,7 @@ export function DataProvider({ children }) {
         setFinanceMap((m) => ({ ...m, [data.id]: Number(billable_rate) }));
       }
       setProjects((a) => [...a, data].sort((x, y) => x.name.localeCompare(y.name)));
+      return data;
     },
     [toast]
   );
@@ -676,6 +692,7 @@ export function DataProvider({ children }) {
     addFavorite,
     removeFavorite,
     startFromFavorite,
+    startFromEntry,
     addProject,
     updateProject,
     projectById,

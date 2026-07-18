@@ -71,7 +71,7 @@ export default function Reports() {
             <div style={{ fontWeight: 700, fontSize: 17 }}>{fmtDuration(totalSecs)}</div>
             <div className="muted" style={{ fontSize: 13 }}>su {fmtDuration(contractedSecs)} da contratto</div>
             <div className="muted" style={{ fontSize: 12.5, marginTop: 6 }}>
-              {contractPct >= 100 ? "Obiettivo raggiunto 🎯" : `Mancano ${fmtDuration(Math.max(0, contractedSecs - totalSecs))}`}
+              {contractPct >= 100 ? "Ore contrattuali completate" : `Mancano ${fmtDuration(Math.max(0, contractedSecs - totalSecs))}`}
             </div>
           </div>
         </div>

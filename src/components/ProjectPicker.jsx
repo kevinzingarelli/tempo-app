@@ -1,11 +1,33 @@
 import { useState, useMemo } from "react";
 import { useData } from "../state/DataContext.jsx";
+import { useAuth } from "../state/AuthContext.jsx";
 import Sheet from "./Sheet.jsx";
-import { IconCheck } from "../lib/icons.jsx";
+import { IconCheck, IconPlus } from "../lib/icons.jsx";
+
+const QUICK_COLORS = ["#2f7d4f", "#3b6ef5", "#e5a300", "#ff8a3d", "#e5484d", "#b14bd8", "#0ca6a6", "#d8567a"];
 
 export default function ProjectPicker({ open, onClose, value, onChange }) {
-  const { activeProjects, clientById, entries } = useData();
+  const { activeProjects, clientById, entries, addProject, toast } = useData();
+  const { isAdmin } = useAuth();
   const [q, setQ] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState(QUICK_COLORS[0]);
+  const [busy, setBusy] = useState(false);
+
+  async function createQuick() {
+    if (!newName.trim()) return;
+    setBusy(true);
+    const created = await addProject({ name: newName.trim(), color: newColor, billable_default: false });
+    setBusy(false);
+    if (created) {
+      toast("Progetto creato.", "ok");
+      setCreating(false);
+      setNewName("");
+      onChange(created.id);
+      onClose();
+    }
+  }
 
   function pick(id) {
     onChange(id);
@@ -77,8 +99,46 @@ export default function ProjectPicker({ open, onClose, value, onChange }) {
           placeholder="Cerca progetto o cliente…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          autoFocus
         />
+      )}
+
+      {isAdmin && (
+        creating ? (
+          <div className="card" style={{ padding: 14, marginBottom: 12 }}>
+            <label className="field-label">Nuovo progetto</label>
+            <input
+              className="field"
+              placeholder="Nome del progetto"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+            <div style={{ display: "flex", gap: 7, flexWrap: "wrap", margin: "10px 0" }}>
+              {QUICK_COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setNewColor(c)}
+                  aria-label="colore"
+                  style={{
+                    width: 26, height: 26, borderRadius: "50%", background: c,
+                    border: newColor === c ? "3px solid var(--ink)" : "2px solid var(--line)",
+                  }}
+                />
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={createQuick} disabled={busy || !newName.trim()}>
+                {busy ? <span className="spinner spinner-white" /> : "Crea e seleziona"}
+              </button>
+              <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setCreating(false)}>
+                Annulla
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className="btn btn-soft btn-block" style={{ marginBottom: 12 }} onClick={() => setCreating(true)}>
+            <IconPlus style={{ width: 16, height: 16 }} /> Nuovo progetto
+          </button>
+        )
       )}
 
       <div className="card">

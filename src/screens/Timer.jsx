@@ -3,6 +3,8 @@ import { useData } from "../state/DataContext.jsx";
 import { useAuth } from "../state/AuthContext.jsx";
 import EntryRow from "../components/EntryRow.jsx";
 import DayView from "../components/DayView.jsx";
+import GrowthTree from "../components/GrowthTree.jsx";
+import TeamNote from "../components/TeamNote.jsx";
 import EntryEditor from "../components/EntryEditor.jsx";
 import ProjectPicker from "../components/ProjectPicker.jsx";
 import Sheet from "../components/Sheet.jsx";
@@ -38,6 +40,7 @@ export default function Timer() {
     resumeTimer,
     updateRunning,
     startFromFavorite,
+    startFromEntry,
     removeFavorite,
     projectById,
     clientById,
@@ -58,7 +61,16 @@ export default function Timer() {
   const [goalText, setGoalText] = useState("");
   const [newsOpen, setNewsOpen] = useState(false);
   const [newsBadge, setNewsBadge] = useState(hasUnseenNews());
+  const [showTree, setShowTree] = useState(() => localStorage.getItem("boschetto_show_tree") !== "0");
   const lastRunId = useRef(null);
+
+  function toggleTree() {
+    setShowTree((v) => {
+      const nv = !v;
+      localStorage.setItem("boschetto_show_tree", nv ? "1" : "0");
+      return nv;
+    });
+  }
 
   const { reloadProfile } = useAuth();
   const { toast } = useData();
@@ -184,14 +196,7 @@ export default function Timer() {
   const todayProjectRows = Object.entries(todayByProject)
     .map(([pk, secs]) => ({ project: pk === "none" ? null : projectById(pk), secs }))
     .sort((a, b) => b.secs - a.secs);
-  const dayPhrase =
-    todaySecs === 0
-      ? null
-      : todaySecs >= 7 * 3600
-      ? "Giornata piena — ben fatto 👏"
-      : todaySecs >= 4 * 3600
-      ? "Buon ritmo oggi 🙂"
-      : "Ogni ora conta, si parte da qui 🌱";
+  const dayPhrase = null;
 
   // raggruppa per giorno (escludendo il timer in corso, mostrato nel card)
   const q = search.trim().toLowerCase();
@@ -388,6 +393,22 @@ export default function Timer() {
         </div>
       </div>
 
+      <TeamNote />
+      {showTree && <GrowthTree userId={user?.id} />}
+
+      {(() => {
+        const now = new Date();
+        const weekday = now.getDay() >= 1 && now.getDay() <= 5;
+        if (todaySecs === 0 && !running && weekday && now.getHours() >= 14) {
+          return (
+            <div className="banner banner-info" style={{ marginTop: 12 }}>
+              Non hai ancora registrato ore oggi. Se hai lavorato, puoi aggiungerle col timer o manualmente.
+            </div>
+          );
+        }
+        return null;
+      })()}
+
       {/* Azioni rapide */}
       <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
         <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setAddOpen(true)}>
@@ -477,6 +498,49 @@ export default function Timer() {
       {/* Timeline della giornata (come Toggl) */}
       <div className="section-label" style={{ marginTop: 2 }}>La tua giornata</div>
       <DayView />
+
+      {/* Ricerca nello storico */}
+      {(entries.filter((e) => e.stopped_at).length > 8 || search) && (
+        <div style={{ marginTop: 18 }}>
+          <input
+            className="field"
+            placeholder="Cerca nelle tue voci…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      )}
+
+      {/* Ultimi lavori */}
+      {loading && completed.length === 0 ? (
+        <div className="center" style={{ marginTop: 40 }}>
+          <span className="spinner" />
+        </div>
+      ) : groups.length === 0 ? (
+        search && (
+          <div className="empty">
+            <div className="empty-emoji">🔍</div>
+            Nessuna voce trovata negli ultimi 70 giorni.
+          </div>
+        )
+      ) : (
+        <>
+          <div className="section-label">Ultimi lavori</div>
+          {groups.map((g) => (
+            <div key={g.key}>
+              <div className="day-total">
+                <span className="t-label">{g.label}</span>
+                <span className="t-value">{fmtDuration(g.total)}</span>
+              </div>
+              <div className="card">
+                {g.items.map((e) => (
+                  <EntryRow key={e.id} entry={e} onEdit={setEditorEntry} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </>
+      )}
       </div>{/* /timer-col-side */}
       </div>{/* /timer-grid */}
 
@@ -520,6 +584,18 @@ export default function Timer() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div className="sheet-row">
+          <button className="list-action card" style={{ width: "100%" }} onClick={toggleTree}>
+            <span>
+              <span style={{ fontWeight: 600, display: "block" }}>Mostra l'albero dei progressi</span>
+              <span className="muted" style={{ fontSize: 12.5 }}>Solo per te, sulla schermata principale</span>
+            </span>
+            <span style={{ width: 46, height: 28, borderRadius: 999, background: showTree ? "var(--ok)" : "var(--line-strong)", position: "relative", flexShrink: 0 }}>
+              <span style={{ position: "absolute", top: 3, left: showTree ? 21 : 3, width: 22, height: 22, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+            </span>
+          </button>
         </div>
 
         <div className="sheet-row">
