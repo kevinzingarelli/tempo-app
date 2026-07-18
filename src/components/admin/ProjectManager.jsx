@@ -20,8 +20,28 @@ function Toggle({ on }) {
 }
 
 function ProjectForm({ project, onClose }) {
-  const { addProject, updateProject, projectRate, clients, addClient } = useData();
+  const { addProject, updateProject, projectRate, clients, addClient, projects, toast } = useData();
   const editing = !!project;
+  const [moveOpen, setMoveOpen] = useState(false);
+  const [moveTarget, setMoveTarget] = useState("");
+  const [moving, setMoving] = useState(false);
+
+  async function doMove() {
+    if (!moveTarget) return;
+    setMoving(true);
+    const { error } = await supabase
+      .from("time_entries")
+      .update({ project_id: moveTarget })
+      .eq("project_id", project.id);
+    setMoving(false);
+    if (error) {
+      toast("Spostamento non riuscito: " + error.message, "error");
+      return;
+    }
+    toast("Ore spostate. Ora puoi archiviare il progetto vuoto.", "ok");
+    setMoveOpen(false);
+  }
+
   const [name, setName] = useState(project?.name || "");
   const [color, setColor] = useState(project?.color || PALETTE[0]);
   const [billable, setBillable] = useState(project?.billable_default || false);
@@ -130,6 +150,40 @@ function ProjectForm({ project, onClose }) {
         <button className="btn btn-ghost btn-block" style={{ marginTop: 10 }} onClick={async () => { await updateProject(project.id, { archived: !project.archived }); onClose(); }}>
           {project.archived ? "Ripristina progetto" : "Archivia progetto"}
         </button>
+      )}
+
+      {editing && (
+        <>
+          <div className="section-label" style={{ marginTop: 18 }}>Sposta / unisci ore</div>
+          {!moveOpen ? (
+            <button className="btn btn-ghost btn-block" onClick={() => setMoveOpen(true)}>
+              Sposta tutte le ore in un altro progetto
+            </button>
+          ) : (
+            <div className="card" style={{ padding: 14 }}>
+              <p className="muted" style={{ fontSize: 12.5, marginTop: 0 }}>
+                Tutte le ore registrate su “{project.name}” passeranno al progetto scelto.
+                Serve per unire doppioni. Le ore non si perdono.
+              </p>
+              <select className="field" value={moveTarget} onChange={(e) => setMoveTarget(e.target.value)}>
+                <option value="">Scegli il progetto di destinazione…</option>
+                {projects
+                  .filter((p) => p.id !== project.id)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+              </select>
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button className="btn btn-primary" style={{ flex: 1 }} disabled={!moveTarget || moving} onClick={doMove}>
+                  {moving ? <span className="spinner spinner-white" /> : "Sposta le ore"}
+                </button>
+                <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setMoveOpen(false)}>
+                  Annulla
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </Sheet>
   );

@@ -169,6 +169,29 @@ export default function Timer() {
     }
   }
 
+  // ---- Riepilogo di fine giornata ----
+  const todayKey = dayKey(new Date());
+  const todayItems = entries.filter((e) => e.stopped_at && dayKey(e.started_at) === todayKey);
+  const todaySecs =
+    todayItems.reduce((s, e) => s + entrySeconds(e), 0) +
+    (running && dayKey(runningEntry.started_at) === todayKey ? elapsed : 0);
+  const todayByProject = {};
+  for (const e of todayItems) {
+    const pk = e.project_id || "none";
+    todayByProject[pk] = (todayByProject[pk] || 0) + entrySeconds(e);
+  }
+  const todayProjectRows = Object.entries(todayByProject)
+    .map(([pk, secs]) => ({ project: pk === "none" ? null : projectById(pk), secs }))
+    .sort((a, b) => b.secs - a.secs);
+  const dayPhrase =
+    todaySecs === 0
+      ? null
+      : todaySecs >= 7 * 3600
+      ? "Giornata piena — ben fatto 👏"
+      : todaySecs >= 4 * 3600
+      ? "Buon ritmo oggi 🙂"
+      : "Ogni ora conta, si parte da qui 🌱";
+
   // raggruppa per giorno (escludendo il timer in corso, mostrato nel card)
   const q = search.trim().toLowerCase();
   const completed = entries.filter((e) => {
@@ -235,6 +258,8 @@ export default function Timer() {
         </button>
       </div>
 
+      <div className="timer-grid">
+      <div className="timer-col-main">
       {/* TIMER HERO */}
       <div
         className={
@@ -369,6 +394,38 @@ export default function Timer() {
         </button>
       </div>
 
+      {/* Riepilogo di fine giornata */}
+      {todaySecs > 0 && (
+        <>
+          <div className="section-label">Oggi</div>
+          <div className="card" style={{ padding: 16 }}>
+            <div className="row-between" style={{ alignItems: "baseline" }}>
+              <span style={{ fontSize: 22, fontWeight: 700, fontFamily: "var(--font-display)" }}>
+                {fmtDuration(todaySecs)}
+              </span>
+              {dayPhrase && (
+                <span className="muted" style={{ fontSize: 13 }}>{dayPhrase}</span>
+              )}
+            </div>
+            {todayProjectRows.length > 0 && (
+              <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 7 }}>
+                {todayProjectRows.map((r) => (
+                  <div key={r.project?.id || "none"} className="row-between" style={{ fontSize: 13.5 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                      <span className="entry-dot" style={{ background: r.project?.color || "#b8b8c0" }} />
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {r.project?.name || "Senza progetto"}
+                      </span>
+                    </span>
+                    <span className="muted">{fmtDuration(r.secs)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
       {/* Preferiti */}
       {favorites.length > 0 && (
         <>
@@ -413,6 +470,9 @@ export default function Timer() {
         </>
       )}
 
+      </div>{/* /timer-col-main */}
+
+      <div className="timer-col-side">
       {/* Ricerca nello storico */}
       {(entries.filter((e) => e.stopped_at).length > 8 || search) && (
         <div style={{ marginTop: 16 }}>
@@ -453,6 +513,8 @@ export default function Timer() {
           </div>
         ))
       )}
+      </div>{/* /timer-col-side */}
+      </div>{/* /timer-grid */}
 
       {/* Sheet */}
       <ProjectPicker

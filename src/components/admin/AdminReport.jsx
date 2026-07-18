@@ -12,6 +12,8 @@ import {
   startOfMonth,
 } from "../../lib/format.js";
 import { IconDownload } from "../../lib/icons.jsx";
+import AdminEntryEditor from "./AdminEntryEditor.jsx";
+import ProjectPicker from "../ProjectPicker.jsx";
 
 function csvCell(v) {
   const s = String(v ?? "");
@@ -40,6 +42,36 @@ export default function AdminReport() {
   const [view, setView] = useState("list"); // list | grid
   const [gridWeek, setGridWeek] = useState(() => startOfWeek());
   const [loading, setLoading] = useState(true);
+  const [editEntry, setEditEntry] = useState(null);
+  const [selected, setSelected] = useState(new Set());
+  const [bulkPicker, setBulkPicker] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  function toggleSel(id) {
+    setSelected((s) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  }
+
+  async function bulkAssign(projectId) {
+    setBulkBusy(true);
+    const ids = [...selected];
+    const { error } = await supabase
+      .from("time_entries")
+      .update({ project_id: projectId })
+      .in("id", ids);
+    setBulkBusy(false);
+    setBulkPicker(false);
+    if (error) {
+      toast("Assegnazione non riuscita: " + error.message, "error");
+      return;
+    }
+    toast(`${ids.length} ${ids.length === 1 ? "voce assegnata" : "voci assegnate"}.`, "ok");
+    setSelected(new Set());
+    load();
+  }
 
   // scorciatoie periodo -> impostano le date
   function setQuickPeriod(p) {
@@ -165,7 +197,7 @@ export default function AdminReport() {
   }
 
   // dettaglio voci quando è selezionata una persona (vista "come utente")
-  const detail = userFilter !== "all";
+  const detail = userFilter !== "all" || projFilter !== "all" || clientFilter !== "all";
   const groups = [];
   if (detail) {
     const byDay = {};
@@ -190,6 +222,7 @@ export default function AdminReport() {
   const gridEndX = new Date(gridWeek);
   gridEndX.setDate(gridWeek.getDate() + 7);
   const gridData = {};
+  const gridProj = {}; // user_id -> [ {proj_id: secs} per giorno ]
   for (const e of rows) {
     const d = new Date(e.started_at);
     if (d < gridWeek || d >= gridEndX) continue;
@@ -199,8 +232,25 @@ export default function AdminReport() {
       if ((p?.client_id || "none") !== clientFilter) continue;
     }
     const dayIdx = Math.floor((d - gridWeek) / 86400000);
-    if (!gridData[e.user_id]) gridData[e.user_id] = Array(7).fill(0);
-    gridData[e.user_id][dayIdx] += entrySeconds(e);
+    if (!gridData[e.user_id]) {
+      gridData[e.user_id] = Array(7).fill(0);
+      gridProj[e.user_id] = Array.from({ length: 7 }, () => ({}));
+    }
+    const secs = entrySeconds(e);
+    gridData[e.user_id][dayIdx] += secs;
+    const pk = e.project_id || "none";
+    gridProj[e.user_id][dayIdx][pk] = (gridProj[e.user_id][dayIdx][pk] || 0) + secs;
+  }
+  // progetto dominante (più secondi) per colorare la cella
+  function dominantColor(userId, dayIdx) {
+    const m = gridProj[userId]?.[dayIdx];
+    if (!m) return null;
+    let best = null, bestN = 0;
+    for (const [pk, n] of Object.entries(m)) {
+      if (n > bestN) { bestN = n; best = pk; }
+    }
+    if (!best || best === "none") return null;
+    return projectById(best)?.color || null;
   }
   const gridRows = peopleList
     .filter((p) => p.active !== false || gridData[p.id])
@@ -268,9 +318,20 @@ export default function AdminReport() {
                   {gridRows.map((r) => (
                     <tr key={r.id}>
                       <td>{r.name}</td>
-                      {r.days.map((s2, i) => (
-                        <td key={i} className={s2 === 0 ? "zero" : ""}>{fmtCell(s2)}</td>
-                      ))}
+                      {r.days.map((s2, i) => {
+                        const col = s2 > 0 ? dominantColor(r.id, i) : null;
+                        return (
+                          <td key={i} className={s2 === 0 ? "zero" : ""}>
+                            {col ? (
+                              <span className="cell-wrap" style={{ background: col }}>
+                                {fmtCell(s2)}
+                              </span>
+                            ) : (
+                              fmtCell(s2)
+                            )}
+                          </td>
+                        );
+                      })}
                       <td className="tot">{fmtDuration(r.total)}</td>
                     </tr>
                   ))}
@@ -278,6 +339,27 @@ export default function AdminReport() {
               </table>
             </div>
           )}
+          {!loading && gridRows.length > 0 && (() => {
+            const present = new Set();
+            Object.values(gridProj).forEach((days) =>
+              days.forEach((m) => Object.keys(m).forEach((pk) => pk !== "none" && present.add(pk)))
+            );
+            const list = [...present].map((pk) => projectById(pk)).filter(Boolean);
+            if (list.length === 0) return null;
+            return (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
+                {list.map((p) => (
+                  <span key={p.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--ink-soft)" }}>
+                    <span className="entry-dot" style={{ background: p.color }} />
+                    {p.name}
+                  </span>
+                ))}
+                <span style={{ fontSize: 11.5, color: "var(--ink-faint)" }}>
+                  (il colore mostra il lavoro prevalente della giornata)
+                </span>
+              </div>
+            );
+          })()}
         </>
       )}
 
@@ -404,10 +486,32 @@ export default function AdminReport() {
             </div>
           )}
 
-          {/* dettaglio voci della persona selezionata */}
+          {/* dettaglio voci */}
           {detail && (
             <>
-              <div className="section-label">Voci di {people[userFilter] || ""}</div>
+              <div className="row-between" style={{ alignItems: "center", marginTop: 4 }}>
+                <div className="section-label" style={{ margin: 0 }}>
+                  {userFilter !== "all"
+                    ? `Voci di ${people[userFilter] || ""}`
+                    : clientFilter === "none"
+                    ? "Voci senza cliente"
+                    : "Voci nel filtro"}
+                </div>
+                {filtered.length > 0 && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      if (selected.size) setSelected(new Set());
+                      else setSelected(new Set(filtered.map((e) => e.id)));
+                    }}
+                  >
+                    {selected.size ? "Deseleziona" : "Seleziona tutto"}
+                  </button>
+                )}
+              </div>
+              <p className="muted" style={{ fontSize: 12, marginTop: 0, marginBottom: 10 }}>
+                Tocca una voce per correggerla, o selezionane più d'una per assegnarle a un progetto in blocco.
+              </p>
               {groups.length === 0 ? (
                 <div className="empty">Nessuna voce nel periodo.</div>
               ) : (
@@ -420,22 +524,35 @@ export default function AdminReport() {
                     <div className="card">
                       {g.items.map((e) => {
                         const p = projectById(e.project_id);
+                        const cl = p?.client_id ? clientById(p.client_id) : null;
+                        const sel = selected.has(e.id);
                         return (
-                          <div key={e.id} className="entry">
-                            <span
-                              className="entry-dot"
-                              style={{ background: p?.color || "#cfcfca" }}
-                            />
-                            <div className="entry-main">
+                          <div key={e.id} className="entry" style={sel ? { background: "rgba(107,105,234,0.08)" } : undefined}>
+                            <button
+                              onClick={() => toggleSel(e.id)}
+                              aria-label="Seleziona"
+                              style={{
+                                width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                                border: sel ? "none" : "2px solid var(--line-strong)",
+                                background: sel ? "var(--brand)" : "transparent",
+                                color: "#fff", display: "grid", placeItems: "center", fontSize: 13,
+                              }}
+                            >
+                              {sel ? "✓" : ""}
+                            </button>
+                            <div
+                              className="entry-main"
+                              style={{ cursor: "pointer" }}
+                              onClick={() => setEditEntry(e)}
+                            >
                               <div className="entry-desc">
-                                {e.description || (
-                                  <span className="muted">Senza descrizione</span>
-                                )}
+                                {e.description || <span className="muted">Senza descrizione</span>}
                               </div>
                               <div className="entry-sub">
-                                {[p?.name, `${fmtTime(e.started_at)}–${fmtTime(e.stopped_at)}`]
-                                  .filter(Boolean)
-                                  .join("  ·  ")}
+                                {[
+                                  p ? (cl ? `${p.name} (${cl.name})` : `${p.name} · senza cliente`) : "Senza progetto",
+                                  `${fmtTime(e.started_at)}–${fmtTime(e.stopped_at)}`,
+                                ].filter(Boolean).join("  ·  ")}
                               </div>
                             </div>
                             <span className="entry-dur">{fmtDuration(entrySeconds(e))}</span>
@@ -451,6 +568,37 @@ export default function AdminReport() {
         </>
       )}
       </>
+      )}
+
+      {/* Barra azioni selezione multipla */}
+      {selected.size > 0 && (
+        <div className="bulk-bar">
+          <span style={{ fontWeight: 600 }}>{selected.size} selezionate</span>
+          <button className="btn btn-primary btn-sm" onClick={() => setBulkPicker(true)} disabled={bulkBusy}>
+            {bulkBusy ? <span className="spinner spinner-white" /> : "Assegna a progetto"}
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setSelected(new Set())}>
+            Annulla
+          </button>
+        </div>
+      )}
+
+      {editEntry && (
+        <AdminEntryEditor
+          entry={editEntry}
+          personName={people[editEntry.user_id] || ""}
+          onClose={() => setEditEntry(null)}
+          onSaved={load}
+        />
+      )}
+
+      {bulkPicker && (
+        <ProjectPicker
+          open={bulkPicker}
+          onClose={() => setBulkPicker(false)}
+          value={null}
+          onChange={(pid) => bulkAssign(pid)}
+        />
       )}
     </div>
   );

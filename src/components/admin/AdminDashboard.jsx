@@ -15,6 +15,56 @@ function eur(n) {
 function hoursOf(secs) {
   return secs / 3600;
 }
+function fmtH(secs) {
+  return (secs / 3600).toFixed(1).replace(".", ",") + " h";
+}
+function periodLabel(period, from) {
+  const today = new Date();
+  if (period === "week") return "Settimana corrente";
+  if (period === "month") return today.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
+  return "Da sempre — al " + today.toLocaleDateString("it-IT");
+}
+
+function openInvoicePDF(companyName, client, period, from) {
+  const rows = Object.entries(client.byProj || {})
+    .sort((a, b) => b[1].rev - a[1].rev)
+    .map(
+      ([name, v]) =>
+        `<tr><td>${name}</td><td class="r">${fmtH(v.secs)}</td><td class="r">${eur(v.rev)}</td></tr>`
+    )
+    .join("");
+  const html = `
+<!doctype html><html lang="it"><head><meta charset="utf-8">
+<title>Fatturazione — ${client.name}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; color: #1a1a22; padding: 48px; max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: #77777f; font-size: 13px; margin-bottom: 28px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+  th, td { text-align: left; padding: 9px 6px; border-bottom: 1px solid #e6e6ea; font-size: 13.5px; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: #9a9aa3; }
+  td.r, th.r { text-align: right; }
+  tfoot td { font-weight: 700; font-size: 15px; border-bottom: none; border-top: 2px solid #1a1a22; padding-top: 12px; }
+  .foot { margin-top: 40px; font-size: 11.5px; color: #9a9aa3; }
+  @media print { body { padding: 0; } }
+</style></head>
+<body>
+  <h1>${companyName}</h1>
+  <div class="sub">Fatturazione — ${client.name} · ${periodLabel(period, from)}</div>
+  <table>
+    <thead><tr><th>Progetto</th><th class="r">Ore fatturabili</th><th class="r">Importo</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td>Totale</td><td class="r">${fmtH(client.billSecs)}</td><td class="r">${eur(client.rev)}</td></tr></tfoot>
+  </table>
+  <div class="foot">Generato da Pomodoro il ${new Date().toLocaleDateString("it-IT")}. Documento riepilogativo, non fiscale.</div>
+  <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
+</body></html>`;
+  const w = window.open("", "_blank");
+  if (!w) return;
+  w.document.write(html);
+  w.document.close();
+}
 
 export default function AdminDashboard() {
   const { projectById, projectRate, clientById, projects } = useData();
@@ -90,9 +140,15 @@ export default function AdminDashboard() {
     // per cliente
     const proj = projectById(e.project_id);
     const ck = proj?.client_id || "none";
-    if (!byClient[ck]) byClient[ck] = { secs: 0, rev: 0, cost: 0, billSecs: 0 };
+    if (!byClient[ck]) byClient[ck] = { secs: 0, rev: 0, cost: 0, billSecs: 0, byProj: {} };
     byClient[ck].secs += secs; byClient[ck].rev += entryRev; byClient[ck].cost += entryCost;
     if (e.billable) byClient[ck].billSecs += secs;
+    if (e.billable) {
+      const pn = proj?.name || "Senza progetto";
+      if (!byClient[ck].byProj[pn]) byClient[ck].byProj[pn] = { secs: 0, rev: 0 };
+      byClient[ck].byProj[pn].secs += secs;
+      byClient[ck].byProj[pn].rev += entryRev;
+    }
 
     // per persona
     if (!byPerson[e.user_id]) byPerson[e.user_id] = 0;
@@ -272,7 +328,15 @@ export default function AdminDashboard() {
                 <span style={{ fontWeight: 600 }}>{r.name}</span>
                 <span className="muted" style={{ fontSize: 12.5, display: "block" }}>{fmtDuration(r.billSecs)} fatturabili</span>
               </span>
-              <span className="entry-dur">{eur(r.rev)}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                <span className="entry-dur">{eur(r.rev)}</span>
+                <button
+                  className="btn btn-soft btn-sm"
+                  onClick={() => openInvoicePDF("Kesia", r, period, from)}
+                >
+                  PDF
+                </button>
+              </span>
             </div>
           ))}
           <div className="list-action" style={{ background: "rgba(39,38,77,0.04)" }}>

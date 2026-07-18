@@ -1098,3 +1098,72 @@ img { -webkit-user-drag: none; user-select: none; }
   border-radius: 50%;
   background: var(--hot-b);
 }
+
+/* ============================================================
+   V7 — Desktop più ampio + colori griglia + timeline
+   ============================================================ */
+@media (min-width: 900px) {
+  .screen { max-width: 1080px; padding: 34px 40px 90px; }
+  .timer-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+  }
+  .timer-col-main { position: sticky; top: 34px; }
+  .timer-col-side { min-width: 0; }
+  /* la ricerca storico non ha il margine mobile qui */
+  .timer-col-side > div:first-child { margin-top: 0 !important; }
+}
+@media (max-width: 899px) {
+  .timer-grid { display: block; }
+}
+
+/* Report/Admin: contenuto che respira su schermo largo */
+@media (min-width: 1100px) {
+  .admin-wide {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+  .admin-wide.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+/* Celle colorate nella griglia settimanale admin */
+.wgrid td.hascolor {
+  color: #fff;
+  font-weight: 700;
+  border-radius: 7px;
+  position: relative;
+}
+.wgrid td .cell-wrap {
+  display: inline-block;
+  min-width: 44px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  color: #fff;
+  font-weight: 700;
+}
+
+/* Barra azioni selezione multipla (admin) */
+.bulk-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--r-pill);
+  background: var(--ink);
+  color: #fff;
+  box-shadow: var(--shadow-md);
+  animation: rise 0.2s ease;
+}
+.bulk-bar .btn-ghost { color: rgba(255,255,255,0.85); }
+@media (min-width: 900px) {
+  .bulk-bar { bottom: 28px; left: calc(50% + 116px); }
+}

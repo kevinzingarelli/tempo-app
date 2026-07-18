@@ -266,12 +266,40 @@ export function DataProvider({ children }) {
         paused_seconds: 0,
       };
       writeLocalTimer(entry);
-      await persist({ type: "insert", table: "time_entries", payload: entry }, () =>
-        setEntries((a) => [entry, ...a])
-      );
+      setEntries((a) => [entry, ...a]);
+
+      // Online: inserisci subito e usa l'id reale del database, così un
+      // eventuale "stop" immediato colpisce la riga giusta (niente timer
+      // che "riappare"). Offline: resta in coda con id locale.
+      if (navigator.onLine) {
+        try {
+          const { id: _tmp, ...toInsert } = entry;
+          const { data, error } = await supabase
+            .from("time_entries")
+            .insert(toInsert)
+            .select()
+            .single();
+          if (error) throw error;
+          if (data) {
+            setEntries((a) => a.map((x) => (x.id === id ? { ...x, ...data } : x)));
+            writeLocalTimer(data);
+          }
+          return;
+        } catch (e) {
+          if (!isNetworkError(e)) {
+            toast(traduciErrore(e), "error");
+            setEntries((a) => a.filter((x) => x.id !== id));
+            writeLocalTimer(null);
+            return;
+          }
+          // errore di rete: ripiega sulla coda offline
+        }
+      }
+      enqueue({ type: "insert", table: "time_entries", payload: entry });
+      setPending(queueCount());
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entries, user, persist]
+    [entries, user, persist, toast]
   );
 
   async function stopTimerInternal(entry, when) {

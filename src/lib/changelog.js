@@ -1,7 +1,29 @@
 // Novità dell'app, dalla più recente. short = etichetta versione.
-export const CURRENT_VERSION = "5";
+export const CURRENT_VERSION = "7";
 
 export const CHANGELOG = [
+  {
+    version: "7",
+    title: "Più veloce, più chiaro, più grande",
+    items: [
+      "Il timer ora si ferma all'istante, senza ritardi di sincronizzazione",
+      "Dopo lo stop puoi scegliere subito il prossimo progetto",
+      "Layout adattato al computer: più spazio, colonne affiancate",
+      "Griglia settimanale admin colorata per progetto, con legenda",
+      "Riepilogo di fine giornata con il totale e il dettaglio per progetto",
+      "Admin: correggi progetto e cliente sulle voci di chiunque, anche in blocco",
+      "Admin: sposta o unisci le ore di un progetto in un altro",
+      "Admin: esporta la fatturazione di un cliente in PDF",
+    ],
+  },
+  {
+    version: "6",
+    title: "Trovare le cose più in fretta",
+    items: [
+      "Ricerca nel selettore progetto: utile quando i progetti sono tanti",
+      "I progetti usati di recente compaiono in cima alla lista",
+    ],
+  },
   {
     version: "5",
     title: "La giornata sotto controllo",
