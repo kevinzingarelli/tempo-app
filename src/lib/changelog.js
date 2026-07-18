@@ -1,9 +1,23 @@
 // Novità dell'app, dalla più recente. short = etichetta versione.
-export const CURRENT_VERSION = "7";
+export const CURRENT_VERSION = "8";
+export const APP_NAME = "Kesia Time";
 
 export const CHANGELOG = [
   {
+    version: "8",
+    date: "2026-07-18",
+    title: "Kesia Time",
+    items: [
+      "Nuovo nome e nuova identità: Kesia Time, con look più professionale",
+      "La tua giornata è ora sulla home: timeline con le ore che scorrono",
+      "Ferie: richiedi i giorni, gli admin approvano; sabato, domenica e feste già segnati",
+      "Novità con versione e data di rilascio, per ritrovare le modifiche",
+      "Report a tutta larghezza su computer, senza testi tagliati e con più colore",
+    ],
+  },
+  {
     version: "7",
+    date: "2026-07-18",
     title: "Più veloce, più chiaro, più grande",
     items: [
       "Il timer ora si ferma all'istante, senza ritardi di sincronizzazione",
@@ -18,6 +32,7 @@ export const CHANGELOG = [
   },
   {
     version: "6",
+    date: "2026-07-17",
     title: "Trovare le cose più in fretta",
     items: [
       "Ricerca nel selettore progetto: utile quando i progetti sono tanti",
@@ -26,6 +41,7 @@ export const CHANGELOG = [
   },
   {
     version: "5",
+    date: "2026-07-16",
     title: "La giornata sotto controllo",
     items: [
       "Vista Giornata: i tuoi lavori come blocchi sulle ore, anche mentre il timer corre",
@@ -37,6 +53,7 @@ export const CHANGELOG = [
   },
   {
     version: "4",
+    date: "2026-07-15",
     title: "Settimana, tema scuro e obiettivi",
     items: [
       "Vista settimana nel Report: i tuoi giorni a colpo d'occhio",
@@ -49,6 +66,7 @@ export const CHANGELOG = [
   },
   {
     version: "3",
+    date: "2026-07-14",
     title: "Pomodoro 🍅",
     items: [
       "Nuovo nome e nuova icona",
@@ -60,6 +78,7 @@ export const CHANGELOG = [
   },
   {
     version: "2",
+    date: "2026-07-13",
     title: "Dashboard e sicurezza",
     items: [
       "Dashboard admin: redditività, produttività, fatturazione",

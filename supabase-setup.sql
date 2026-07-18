@@ -219,6 +219,57 @@ create policy favorites_all on public.favorites
   for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- ============================================================
+--  FERIE E GIORNI DI CHIUSURA (aggiunto in Kesia Time v8)
+--  Non distruttivo: crea le tabelle solo se non esistono.
+-- ============================================================
+
+create table if not exists public.time_off (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  start_date date not null,
+  end_date date not null,
+  note text,
+  status text not null default 'pending',   -- pending | approved | rejected
+  decided_by uuid references auth.users(id),
+  decided_at timestamptz,
+  created_at timestamptz default now()
+);
+alter table public.time_off enable row level security;
+
+drop policy if exists timeoff_select on public.time_off;
+create policy timeoff_select on public.time_off
+  for select using (user_id = auth.uid() or public.is_admin());
+
+drop policy if exists timeoff_insert on public.time_off;
+create policy timeoff_insert on public.time_off
+  for insert with check (user_id = auth.uid() and public.is_active());
+
+drop policy if exists timeoff_update on public.time_off;
+create policy timeoff_update on public.time_off
+  for update using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists timeoff_delete on public.time_off;
+create policy timeoff_delete on public.time_off
+  for delete using ((user_id = auth.uid() and status = 'pending') or public.is_admin());
+
+-- Giorni rossi comuni (feste, chiusure aziendali). Sab/dom sono gestiti dall'app.
+create table if not exists public.closures (
+  id uuid primary key default gen_random_uuid(),
+  day date not null unique,
+  label text,
+  created_at timestamptz default now()
+);
+alter table public.closures enable row level security;
+
+drop policy if exists closures_select on public.closures;
+create policy closures_select on public.closures
+  for select using (auth.uid() is not null);
+
+drop policy if exists closures_all on public.closures;
+create policy closures_all on public.closures
+  for all using (public.is_admin()) with check (public.is_admin());
+
+-- ============================================================
 --  FATTO. Database pronto e sicuro.
 --
 --  ULTIMO PASSO — diventare amministratore:

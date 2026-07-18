@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useData } from "../state/DataContext.jsx";
 import { useAuth } from "../state/AuthContext.jsx";
 import EntryRow from "../components/EntryRow.jsx";
+import DayView from "../components/DayView.jsx";
 import EntryEditor from "../components/EntryEditor.jsx";
 import ProjectPicker from "../components/ProjectPicker.jsx";
 import Sheet from "../components/Sheet.jsx";
@@ -23,7 +24,7 @@ import {
 } from "../lib/icons.jsx";
 import { supabase } from "../lib/supabase";
 import { getThemePref, setThemePref } from "../lib/theme.js";
-import { CHANGELOG, hasUnseenNews, markNewsSeen } from "../lib/changelog.js";
+import { CHANGELOG, APP_NAME, hasUnseenNews, markNewsSeen } from "../lib/changelog.js";
 
 export default function Timer() {
   const { profile, user, isAdmin, signOut } = useAuth();
@@ -473,46 +474,9 @@ export default function Timer() {
       </div>{/* /timer-col-main */}
 
       <div className="timer-col-side">
-      {/* Ricerca nello storico */}
-      {(entries.filter((e) => e.stopped_at).length > 8 || search) && (
-        <div style={{ marginTop: 16 }}>
-          <input
-            className="field"
-            placeholder="Cerca nelle tue voci…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      )}
-
-      {/* Storico */}
-      {loading && completed.length === 0 ? (
-        <div className="center" style={{ marginTop: 40 }}>
-          <span className="spinner" />
-        </div>
-      ) : groups.length === 0 ? (
-        <div className="empty">
-          <div className="empty-emoji">{q ? "🔍" : "⏱️"}</div>
-          {q
-            ? "Nessuna voce trovata negli ultimi 70 giorni."
-            : "Nessuna voce ancora. Avvia il timer o aggiungi le ore manualmente."}
-        </div>
-      ) : (
-        groups.map((g) => (
-          <div key={g.key}>
-            <div className="section-label">{g.label}</div>
-            <div className="day-total">
-              <span className="t-label">Totale</span>
-              <span className="t-value">{fmtDuration(g.total)}</span>
-            </div>
-            <div className="card">
-              {g.items.map((e) => (
-                <EntryRow key={e.id} entry={e} onEdit={setEditorEntry} />
-              ))}
-            </div>
-          </div>
-        ))
-      )}
+      {/* Timeline della giornata (come Toggl) */}
+      <div className="section-label" style={{ marginTop: 2 }}>La tua giornata</div>
+      <DayView />
       </div>{/* /timer-col-side */}
       </div>{/* /timer-grid */}
 
@@ -595,10 +559,26 @@ export default function Timer() {
       <Sheet open={newsOpen} onClose={() => setNewsOpen(false)} title="Novità">
         {CHANGELOG.map((v) => (
           <div key={v.version} className="card" style={{ padding: 16, marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, fontFamily: "var(--font-display)" }}>
-              {v.title}
+            <div className="row-between" style={{ alignItems: "baseline" }}>
+              <div style={{ fontWeight: 700, fontFamily: "var(--font-display)" }}>
+                {v.title}
+              </div>
+              <span
+                style={{
+                  fontSize: 11.5, fontWeight: 700, color: "var(--brand)",
+                  background: "var(--brand-soft)", padding: "3px 8px", borderRadius: "var(--r-pill)",
+                  whiteSpace: "nowrap", flexShrink: 0, marginLeft: 8,
+                }}
+              >
+                {APP_NAME} v{v.version}
+              </span>
             </div>
-            <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 13.5, lineHeight: 1.6, color: "var(--ink-soft)" }}>
+            {v.date && (
+              <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+                Rilascio {new Date(v.date + "T00:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" })}
+              </div>
+            )}
+            <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 13.5, lineHeight: 1.6, color: "var(--ink-soft)" }}>
               {v.items.map((it, i) => (
                 <li key={i}>{it}</li>
               ))}

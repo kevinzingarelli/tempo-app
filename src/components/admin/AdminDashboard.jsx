@@ -57,7 +57,7 @@ function openInvoicePDF(companyName, client, period, from) {
     <tbody>${rows}</tbody>
     <tfoot><tr><td>Totale</td><td class="r">${fmtH(client.billSecs)}</td><td class="r">${eur(client.rev)}</td></tr></tfoot>
   </table>
-  <div class="foot">Generato da Pomodoro il ${new Date().toLocaleDateString("it-IT")}. Documento riepilogativo, non fiscale.</div>
+  <div class="foot">Generato da Kesia Time il ${new Date().toLocaleDateString("it-IT")}. Documento riepilogativo, non fiscale.</div>
   <script>window.onload = () => setTimeout(() => window.print(), 300);</script>
 </body></html>`;
   const w = window.open("", "_blank");

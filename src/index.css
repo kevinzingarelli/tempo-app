@@ -1,43 +1,48 @@
 /* ============================================================
-   POMODORO — Design system
-   Idea guida: l'interfaccia cambia "temperatura". Calma quando
-   non registri, calda (ambra->corallo) quando il timer corre.
+   KESIA TIME — Design system
+   Sobrio e professionale. Accento indaco/blu aziendale.
+   Il timer in corso resta l'unico elemento "caldo" per
+   distinguerlo a colpo d'occhio.
    ============================================================ */
 
 :root {
-  /* Superfici */
-  --paper: #f4f4f1;
+  /* Superfici — grigi neutri, niente tinte calde */
+  --paper: #f5f6f8;
   --surface: #ffffff;
-  --surface-2: #fbfbf9;
-  --ink: #16161d;
-  --ink-soft: #5d5d68;
-  --ink-faint: #9a9aa3;
-  --line: #e7e7e1;
-  --line-strong: #d9d9d2;
+  --surface-2: #fafbfc;
+  --ink: #14161c;
+  --ink-soft: #565b66;
+  --ink-faint: #9095a0;
+  --line: #e8eaee;
+  --line-strong: #d6d9e0;
 
-  /* Brand / azioni */
-  --brand: #27264d;
-  --brand-press: #1d1c3b;
+  /* Brand / azioni — indaco aziendale */
+  --brand: #4f46e5;
+  --brand-press: #4338ca;
+  --brand-soft: #eef0fe;
 
-  /* Caldo (stato "in corso") */
-  --hot-a: #ff8a3d;
-  --hot-b: #ff5e62;
-  --hot-grad: linear-gradient(135deg, #ff8a3d 0%, #ff5e62 100%);
+  /* Caldo (stato "in corso") — corallo sobrio, meno acceso */
+  --hot-a: #f97362;
+  --hot-b: #ef4d5b;
+  --hot-grad: linear-gradient(135deg, #f97362 0%, #ef4d5b 100%);
 
   /* Semantici */
-  --stop: #e5484d;
-  --ok: #1f9d6b;
-  --warn: #c98a00;
+  --stop: #e0424b;
+  --ok: #12996b;
+  --warn: #c07f11;
 
-  /* Forma */
-  --r-sm: 10px;
-  --r-md: 14px;
-  --r-lg: 20px;
+  /* Forma — angoli un filo più stretti, aspetto meno "app giocosa" */
+  --r-sm: 9px;
+  --r-md: 12px;
+  --r-lg: 18px;
   --r-pill: 999px;
 
-  --shadow-sm: 0 1px 2px rgba(22, 22, 29, 0.06);
-  --shadow-md: 0 6px 20px rgba(22, 22, 29, 0.08);
-  --shadow-hot: 0 8px 28px rgba(255, 94, 98, 0.30);
+  --shadow-sm: 0 1px 2px rgba(20, 22, 28, 0.05);
+  --shadow-md: 0 4px 16px rgba(20, 22, 28, 0.07);
+  --shadow-lg: 0 12px 32px rgba(20, 22, 28, 0.10);
+  --shadow-hot: 0 6px 22px rgba(239, 77, 91, 0.24);
+
+  --ring-track: rgba(79, 70, 229, 0.12);
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -512,7 +517,7 @@ h1, h2, h3 {
   padding: 9px 0;
 }
 .bar-name {
-  width: 96px;
+  width: 120px;
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
@@ -520,10 +525,13 @@ h1, h2, h3 {
   text-overflow: ellipsis;
   flex-shrink: 0;
 }
+@media (min-width: 900px) {
+  .bar-name { width: 220px; }
+}
 .bar-track {
   flex: 1;
   height: 22px;
-  background: rgba(39, 38, 77, 0.06);
+  background: var(--ring-track);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -876,27 +884,29 @@ img { -webkit-user-drag: none; user-select: none; }
 :root { --ring-track: rgba(39, 38, 77, 0.10); }
 
 [data-theme="dark"] {
-  --paper: #121216;
-  --surface: #1b1b22;
-  --surface-2: #17171d;
-  --ink: #e6e6ea;            /* off-white, non bianco puro */
-  --ink-soft: #a3a3ae;
-  --ink-faint: #70707c;
-  --line: #26262e;
-  --line-strong: #35353f;
-  --brand: #6b69ea;
-  --brand-press: #5a58d6;
-  --stop: #ff6b6b;
-  --ok: #34c98e;
+  --paper: #0f1017;
+  --surface: #191a22;
+  --surface-2: #14151c;
+  --ink: #e7e8ee;            /* off-white, non bianco puro */
+  --ink-soft: #a0a3b0;
+  --ink-faint: #6d7180;
+  --line: #262835;
+  --line-strong: #363a4a;
+  --brand: #7c76ff;
+  --brand-press: #6a63f5;
+  --brand-soft: rgba(124, 118, 255, 0.14);
+  --stop: #ff6069;
+  --ok: #2bcf8e;
   --warn: #e0a53a;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.45);
-  --shadow-hot: 0 8px 28px rgba(255, 94, 98, 0.25);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 14px 34px rgba(0, 0, 0, 0.55);
+  --shadow-hot: 0 6px 22px rgba(239, 77, 91, 0.22);
   --ring-track: rgba(255, 255, 255, 0.10);
   color-scheme: dark;
 }
-[data-theme="dark"] .bottom-nav { background: rgba(16, 16, 20, 0.82); }
-[data-theme="dark"] .nav-btn.active { background: rgba(107, 105, 234, 0.16); }
+[data-theme="dark"] .bottom-nav { background: rgba(15, 16, 23, 0.85); }
+[data-theme="dark"] .nav-btn.active { background: var(--brand-soft); }
 [data-theme="dark"] .segment { background: rgba(255, 255, 255, 0.07); }
 [data-theme="dark"] .segment button.active { background: #2a2a33; color: var(--ink); }
 [data-theme="dark"] .toast { background: #2e2e38; }
@@ -1103,7 +1113,7 @@ img { -webkit-user-drag: none; user-select: none; }
    V7 — Desktop più ampio + colori griglia + timeline
    ============================================================ */
 @media (min-width: 900px) {
-  .screen { max-width: 1080px; padding: 34px 40px 90px; }
+  .screen { max-width: 1180px; padding: 36px 44px 96px; }
   .timer-grid {
     display: grid;
     grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
@@ -1167,3 +1177,9 @@ img { -webkit-user-drag: none; user-select: none; }
 @media (min-width: 900px) {
   .bulk-bar { bottom: 28px; left: calc(50% + 116px); }
 }
+
+/* Ferie */
+.dot-red { width: 10px; height: 10px; border-radius: 50%; background: var(--stop); flex-shrink: 0; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.screen-head { margin-bottom: 18px; }
+.screen-sub { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; }

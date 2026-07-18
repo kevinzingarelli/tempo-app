@@ -6,6 +6,7 @@ import Timer from "./screens/Timer.jsx";
 import Reports from "./screens/Reports.jsx";
 import PersonalStats from "./screens/PersonalStats.jsx";
 import Admin from "./screens/Admin.jsx";
+import TimeOff from "./screens/TimeOff.jsx";
 import ConfigNeeded from "./screens/ConfigNeeded.jsx";
 import BottomNav from "./components/BottomNav.jsx";
 import { IconClock } from "./lib/icons.jsx";
@@ -88,6 +89,7 @@ function MainApp() {
         {tab === "timer" && <Timer />}
         {tab === "stats" && <PersonalStats />}
         {tab === "reports" && <Reports />}
+        {tab === "timeoff" && <TimeOff />}
         {tab === "admin" && isAdmin && <Admin />}
         <BottomNav tab={tab} setTab={setTab} isAdmin={isAdmin} />
         <Toasts />
