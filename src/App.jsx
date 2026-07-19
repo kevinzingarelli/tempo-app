@@ -58,14 +58,15 @@ function OfflinePill() {
 }
 
 function LongTimerPill({ tab, setTab }) {
-  const { runningEntry } = useData();
+  const { runningEntries } = useData();
   const [, tick] = useStateReact(0);
   useEffectReact(() => {
     const t = setInterval(() => tick((n) => n + 1), 60000);
     return () => clearInterval(t);
   }, []);
-  if (!runningEntry || runningEntry.paused_at || tab === "timer") return null;
-  if (entrySeconds(runningEntry) <= 4 * 3600) return null;
+  if (tab === "timer") return null;
+  const anyLong = runningEntries.some((e) => !e.paused_at && entrySeconds(e) > 4 * 3600);
+  if (!anyLong) return null;
   return (
     <button
       className="offline-pill"

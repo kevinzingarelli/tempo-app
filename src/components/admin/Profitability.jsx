@@ -24,6 +24,7 @@ export default function Profitability() {
   const [loading, setLoading] = useState(true);
   const [entries, setEntries] = useState([]);
   const [costByUser, setCostByUser] = useState({});   // user_id -> €/h
+  const [marginTargets, setMarginTargets] = useState({}); // client_id -> % obiettivo
   const [expanded, setExpanded] = useState(null);
 
   function setQuickPeriod(p) {
@@ -40,13 +41,14 @@ export default function Profitability() {
     const from = new Date(fromDate + "T00:00:00");
     const to = new Date(toDate + "T23:59:59");
 
-    const [{ data: ent }, { data: profs }, { data: costs }] = await Promise.all([
+    const [{ data: ent }, { data: profs }, { data: costs }, { data: opps }] = await Promise.all([
       supabase.from("time_entries").select("*")
         .not("stopped_at", "is", null)
         .gte("started_at", from.toISOString())
         .lte("started_at", to.toISOString()),
       supabase.from("profiles").select("id, name, cost_rate"),
       supabase.from("staff_cost").select("*"),
+      supabase.from("opportunities").select("client_id, margin_target_pct").not("margin_target_pct", "is", null),
     ]);
 
     // costo orario per persona (staff_cost con fallback su cost_rate)
@@ -61,6 +63,16 @@ export default function Profitability() {
 
     setEntries(ent || []);
     setCostByUser(rateMap);
+    const targetMap = {};
+    (opps || []).forEach((o) => {
+      if (o.client_id && o.margin_target_pct != null) {
+        // se più opportunità, prendo la soglia più bassa (più prudente)
+        targetMap[o.client_id] = targetMap[o.client_id] != null
+          ? Math.min(targetMap[o.client_id], o.margin_target_pct)
+          : o.margin_target_pct;
+      }
+    });
+    setMarginTargets(targetMap);
     setLoading(false);
   }, [fromDate, toDate]);
 
@@ -196,6 +208,9 @@ export default function Profitability() {
                   <div style={{ fontWeight: 700, color: r.margin >= 0 ? "var(--ok)" : "var(--stop)" }}>{eur(r.margin)}</div>
                   {r.marginPct != null && (
                     <div className="muted" style={{ fontSize: 12 }}>{r.marginPct.toFixed(0)}% margine</div>
+                  )}
+                  {marginTargets[r.cid] != null && r.marginPct != null && r.marginPct < marginTargets[r.cid] && (
+                    <div style={{ fontSize: 11, color: "var(--warn)", fontWeight: 600 }}>⚠️ sotto obiettivo ({marginTargets[r.cid]}%)</div>
                   )}
                 </div>
               </button>

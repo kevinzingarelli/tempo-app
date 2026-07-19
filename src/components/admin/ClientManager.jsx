@@ -76,21 +76,28 @@ function ClientForm({ client, onClose }) {
 export default function ClientManager() {
   const { clients, projects } = useData();
   const [totals, setTotals] = useState({}); // project_id -> secs
+  const [opps, setOpps] = useState({});      // client_id -> [opportunità]
   const [open, setOpen] = useState({});
   const [formClient, setFormClient] = useState(null);
   const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from("time_entries")
-      .select("project_id, duration_seconds, started_at, stopped_at")
-      .not("stopped_at", "is", null);
+    const [{ data: ent }, { data: oppData }] = await Promise.all([
+      supabase.from("time_entries").select("project_id, duration_seconds, started_at, stopped_at").not("stopped_at", "is", null),
+      supabase.from("opportunities").select("*").order("closing_date", { ascending: false }),
+    ]);
     const m = {};
-    (data || []).forEach((e) => {
+    (ent || []).forEach((e) => {
       const k = e.project_id || "none";
       m[k] = (m[k] || 0) + entrySeconds(e);
     });
     setTotals(m);
+    const om = {};
+    (oppData || []).forEach((o) => {
+      const k = o.client_id || "none";
+      (om[k] = om[k] || []).push(o);
+    });
+    setOpps(om);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -151,6 +158,19 @@ export default function ClientManager() {
 
                 {isOpen && (
                   <div style={{ padding: "0 14px 10px 40px" }}>
+                    {(opps[client.id] || []).length > 0 && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div className="muted" style={{ fontSize: 11.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 5 }}>Opportunità</div>
+                        {(opps[client.id] || []).map((o) => (
+                          <div key={o.id} className="row-between" style={{ padding: "5px 0", fontSize: 13 }}>
+                            <span>{o.title}{o.stage ? ` · ${o.stage}` : ""}</span>
+                            <span style={{ fontWeight: 600 }}>
+                              {o.amount != null ? o.amount.toLocaleString("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }) : "—"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     {projs.length === 0 ? (
                       <p className="muted" style={{ fontSize: 13, margin: "4px 0 8px" }}>
                         Nessun progetto collegato.

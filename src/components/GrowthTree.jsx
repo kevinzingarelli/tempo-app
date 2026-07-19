@@ -20,10 +20,13 @@ const LEAF = [
 ];
 
 export default function GrowthTree({ userId }) {
-  const { runningEntry } = useData();
+  const { runningEntries } = useData();
   const [baseSecs, setBaseSecs] = useState(null); // totale voci concluse (dal DB)
   const [, setTick] = useState(0);
   const runningStartRef = useRef(null);
+
+  // ids dei timer attivi, come stringa stabile per confronto nelle dipendenze
+  const runningIdsKey = runningEntries.map((e) => e.id).join(",");
 
   // Carico il totale delle voci concluse (una volta, e a ogni stop/nuovo timer)
   useEffect(() => {
@@ -40,20 +43,20 @@ export default function GrowthTree({ userId }) {
       setBaseSecs(total);
     })();
     return () => { cancelled = true; };
-    // si ricarica quando cambia l'id del timer in corso (nuovo avvio o stop)
-  }, [userId, runningEntry?.id]);
+    // si ricarica quando cambiano i timer in corso (nuovo avvio o stop)
+  }, [userId, runningIdsKey]);
 
   // Aggiornamento live: ogni 20s ricalcolo (fa avanzare la barra col timer)
   useEffect(() => {
-    if (!runningEntry) return;
+    if (runningEntries.length === 0) return;
     const t = setInterval(() => setTick((n) => n + 1), 20000);
     return () => clearInterval(t);
-  }, [runningEntry]);
+  }, [runningEntries.length]);
 
   if (baseSecs === null) return null;
 
   // Secondi "live" = base + timer in corso (se attivo e non in pausa)
-  const liveSecs = runningEntry ? entrySeconds(runningEntry) : 0;
+  const liveSecs = runningEntries.reduce((s, e) => s + entrySeconds(e), 0);
   const totalSecs = baseSecs + liveSecs;
   const totalHours = totalSecs / 3600;
 
@@ -69,7 +72,7 @@ export default function GrowthTree({ userId }) {
 
   // scala di crescita continua 0→1 sull'intero percorso di uno stadio
   const growth = isMax ? 1 : intoStage / HOURS_PER_STAGE;
-  const isLive = !!runningEntry && !runningEntry.paused_at;
+  const isLive = runningEntries.some((e) => !e.paused_at);
 
   return (
     <div className="card growth-card">

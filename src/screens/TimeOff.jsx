@@ -75,6 +75,7 @@ export default function TimeOff() {
   const [mine, setMine] = useState([]);
   const [allReq, setAllReq] = useState([]);
   const [people, setPeople] = useState({});
+  const [peopleLeave, setPeopleLeave] = useState({});
   const [closures, setClosures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(() => { const d = new Date(); d.setDate(1); return d; });
@@ -103,12 +104,17 @@ export default function TimeOff() {
       if (isAdmin) {
         const [allRes, profRes] = await Promise.all([
           supabase.from("time_off").select("*").order("created_at", { ascending: false }),
-          supabase.from("profiles").select("id, name"),
+          supabase.from("profiles").select("id, name, annual_leave_days"),
         ]);
         setAllReq(allRes.data || []);
         const m = {};
-        (profRes.data || []).forEach((p) => (m[p.id] = p.name || "Senza nome"));
+        const leaveMap = {};
+        (profRes.data || []).forEach((p) => {
+          m[p.id] = p.name || "Senza nome";
+          leaveMap[p.id] = p.annual_leave_days ?? null;
+        });
         setPeople(m);
+        setPeopleLeave(leaveMap);
       }
     } catch (e) {
       toast(friendlyError(e), "error");
@@ -208,6 +214,46 @@ export default function TimeOff() {
   const myLeaveTotal = profile?.annual_leave_days ?? null;
   const myLeaveLeft = myLeaveTotal != null ? Math.max(0, myLeaveTotal - myLeaveUsed) : null;
   const decided = allReq.filter((r) => r.status !== "pending");
+
+  // Alert ferie non godute (solo admin): stima gestionale.
+  // Conto i giorni di ferie APPROVATE per persona nell'anno corrente e li
+  // confronto col monte annuo. Se una persona ha usato molto poco delle sue
+  // ferie e siamo nella seconda metà dell'anno, la segnalo come promemoria:
+  // le ferie non godute vanno usate entro 18 mesi (rischio di perderle/contenzioso).
+  const leaveAlerts = (() => {
+    if (!isAdmin) return [];
+    const y = new Date().getFullYear();
+    const month = new Date().getMonth(); // 0-11
+    const alerts = [];
+    // giorni ferie approvati per persona quest'anno (kind ferie)
+    const usedByPerson = {};
+    for (const r of allReq) {
+      if (r.status !== "approved") continue;
+      if (r.kind && r.kind !== "ferie") continue;
+      let d = new Date(r.start_date + "T00:00:00");
+      const end = new Date(r.end_date + "T00:00:00");
+      while (d <= end) {
+        if (d.getFullYear() === y) {
+          const wd = d.getDay();
+          if (wd !== 0 && wd !== 6) usedByPerson[r.user_id] = (usedByPerson[r.user_id] || 0) + 1;
+        }
+        d = new Date(d.getTime() + 86400000);
+      }
+    }
+    for (const [uid, total] of Object.entries(peopleLeave)) {
+      if (total == null || total <= 0) continue;
+      const used = usedByPerson[uid] || 0;
+      const left = total - used;
+      // maturato teorico a oggi (proporzionale ai mesi trascorsi)
+      const accruedSoFar = total * ((month + 1) / 12);
+      // segnalo se: siamo dopo giugno E la persona ha ancora molte ferie non godute
+      // (residuo > metà del monte annuo dopo metà anno = sta accumulando)
+      if (month >= 6 && left > total * 0.5) {
+        alerts.push({ uid, name: people[uid] || "Senza nome", left, total, used });
+      }
+    }
+    return alerts.sort((a, b) => b.left - a.left);
+  })();
 
   const closureDays = new Set(closures.map((c) => c.day));
   const proposedHolidays = [...nationalHolidays(month.getFullYear()), ...nationalHolidays(month.getFullYear() + 1)]
@@ -339,6 +385,23 @@ export default function TimeOff() {
       </div>
 
       <div>
+      {isAdmin && leaveAlerts.length > 0 && (
+        <div className="card" style={{ padding: 14, marginBottom: 16, borderLeft: "3px solid var(--warn)" }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>🏖️ Ferie da smaltire</div>
+          <p className="muted" style={{ fontSize: 12.5, margin: "0 0 10px" }}>
+            Queste persone hanno ancora molte ferie non godute. Le ferie vanno usate entro 18 mesi dalla maturazione: pianificarle per tempo evita di perderle.
+          </p>
+          {leaveAlerts.map((a) => (
+            <div key={a.uid} className="row-between" style={{ padding: "5px 0", fontSize: 13.5 }}>
+              <span style={{ fontWeight: 600 }}>{a.name}</span>
+              <span style={{ color: "var(--warn)", fontWeight: 700 }}>{a.left} gg residui <span className="muted" style={{ fontWeight: 400 }}>/ {a.total}</span></span>
+            </div>
+          ))}
+          <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>
+            ⚠️ Stima gestionale interna. Il saldo ufficiale è quello del consulente del lavoro.
+          </p>
+        </div>
+      )}
       {isAdmin && (
         <>
           <div className="section-label" style={{ marginTop: 0 }}>Da approvare {pending.length > 0 && `(${pending.length})`}</div>

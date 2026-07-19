@@ -426,6 +426,56 @@ alter table public.projects add column if not exists planned_seconds integer;
 alter table public.projects add column if not exists is_overhead boolean not null default false;
 
 -- ============================================================
+--  INTEGRAZIONE ZOHO CRM (Boschetto v14, Blocco C)
+--
+--  Il collegamento a Zoho è UNICO per l'azienda (non per persona, a
+--  differenza di Google Calendar): un admin lo collega una volta e
+--  tutti gli admin possono importare le opportunità.
+-- ============================================================
+
+-- Token OAuth Zoho (una sola riga per l'azienda: id fisso 'company').
+create table if not exists public.zoho_tokens (
+  id text primary key default 'company',
+  access_token text,
+  refresh_token text,
+  expiry timestamptz,
+  connected_by uuid references auth.users(id),
+  connected_at timestamptz default now()
+);
+alter table public.zoho_tokens enable row level security;
+
+drop policy if exists zoho_tokens_admin on public.zoho_tokens;
+create policy zoho_tokens_admin on public.zoho_tokens
+  for all using (public.is_admin()) with check (public.is_admin());
+
+-- Opportunità importate da Zoho CRM (Deals), collegate ai nostri
+-- clienti/progetti. Il valore economico resta quello di Zoho: qui non
+-- lo ricalcoliamo, lo leggiamo per il margine di commessa.
+create table if not exists public.opportunities (
+  id uuid primary key default gen_random_uuid(),
+  zoho_deal_id text unique,
+  title text not null,
+  account_name text,             -- nome cliente su Zoho (per il match)
+  client_id uuid references public.clients(id) on delete set null,
+  project_id uuid references public.projects(id) on delete set null,
+  amount numeric,                 -- imponibile (dal Deal)
+  vat_pct numeric default 22,     -- aliquota IVA presunta
+  currency text default 'EUR',
+  stage text,                     -- fase Zoho (es. "Chiusa vinta")
+  closing_date date,
+  margin_target_pct numeric,      -- margine-obiettivo impostato da noi
+  imported_at timestamptz default now(),
+  imported_by uuid references auth.users(id),
+  created_at timestamptz default now()
+);
+alter table public.opportunities enable row level security;
+
+-- Solo admin: le opportunità mostrano valori economici.
+drop policy if exists opportunities_admin on public.opportunities;
+create policy opportunities_admin on public.opportunities
+  for all using (public.is_admin()) with check (public.is_admin());
+
+-- ============================================================
 --  FATTO. Database pronto e sicuro.
 --
 --  ULTIMO PASSO — diventare amministratore:

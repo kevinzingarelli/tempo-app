@@ -238,17 +238,27 @@ export function DataProvider({ children }) {
     [executor, toast]
   );
 
-  const runningEntry = entries.find((e) => !e.stopped_at) || null;
+  // Tutti i timer attivi (senza stopped_at), dal più recente. Per la
+  // maggior parte delle persone ce n'è al massimo uno; solo per gli admin
+  // (Kevin, Asia) è possibile averne più di uno in parallelo.
+  const runningEntries = entries.filter((e) => !e.stopped_at)
+    .sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+  // "Timer principale": il più recente. Tutto il codice esistente che usa
+  // runningEntry (singolare) continua a funzionare senza modifiche.
+  const runningEntry = runningEntries[0] || null;
 
   // ---------- Timer ----------
   const startTimer = useCallback(
-    async ({ description = "", project_id = null, tags = [], billable = false }) => {
+    async ({ description = "", project_id = null, tags = [], billable = false, parallel = false }) => {
       const now = new Date();
 
-      // ferma un eventuale timer in corso
-      const current = entries.find((e) => !e.stopped_at);
-      if (current) {
-        await stopTimerInternal(current, now);
+      // ferma un eventuale timer in corso — salvo se sto avviando un
+      // timer IN PARALLELO (funzione riservata agli admin, vedi UI).
+      if (!parallel) {
+        const current = entries.find((e) => !e.stopped_at);
+        if (current) {
+          await stopTimerInternal(current, now);
+        }
       }
 
       const id = localId();
@@ -327,15 +337,19 @@ export function DataProvider({ children }) {
     });
   }
 
-  const stopTimer = useCallback(async () => {
-    const current = entries.find((e) => !e.stopped_at);
+  const stopTimer = useCallback(async (entryId = null) => {
+    const current = entryId
+      ? entries.find((e) => e.id === entryId && !e.stopped_at)
+      : entries.find((e) => !e.stopped_at);
     if (current) await stopTimerInternal(current, new Date());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entries, persist]);
 
   // ---------- Pausa / Riprendi ----------
-  const pauseTimer = useCallback(async () => {
-    const current = entries.find((e) => !e.stopped_at);
+  const pauseTimer = useCallback(async (entryId = null) => {
+    const current = entryId
+      ? entries.find((e) => e.id === entryId && !e.stopped_at)
+      : entries.find((e) => !e.stopped_at);
     if (!current || current.paused_at) return;
     const fields = { paused_at: new Date().toISOString() };
     const updated = { ...current, ...fields };
@@ -346,8 +360,10 @@ export function DataProvider({ children }) {
     );
   }, [entries, persist]);
 
-  const resumeTimer = useCallback(async () => {
-    const current = entries.find((e) => !e.stopped_at);
+  const resumeTimer = useCallback(async (entryId = null) => {
+    const current = entryId
+      ? entries.find((e) => e.id === entryId && !e.stopped_at)
+      : entries.find((e) => !e.stopped_at);
     if (!current || !current.paused_at) return;
     const extra = Math.max(
       0,
@@ -681,6 +697,7 @@ export function DataProvider({ children }) {
     entries,
     favorites,
     runningEntry,
+    runningEntries,
     tagSuggestions,
     descSuggestions,
     startTimer,

@@ -4,6 +4,7 @@ import AdminDashboard from "../components/admin/AdminDashboard.jsx";
 import AdminReport from "../components/admin/AdminReport.jsx";
 import ReportExplorer from "../components/admin/ReportExplorer.jsx";
 import Profitability from "../components/admin/Profitability.jsx";
+import Opportunities from "../components/admin/Opportunities.jsx";
 import TaskStats from "../components/admin/TaskStats.jsx";
 import ProjectManager from "../components/admin/ProjectManager.jsx";
 import ClientManager from "../components/admin/ClientManager.jsx";
@@ -15,6 +16,7 @@ const TABS = [
   { id: "report", label: "Report" },
   { id: "explore", label: "Esplora" },
   { id: "profit", label: "Redditività" },
+  { id: "opps", label: "Opportunità" },
   { id: "tasks", label: "Attività" },
   { id: "projects", label: "Progetti" },
   { id: "clients", label: "Clienti" },
@@ -64,6 +66,7 @@ export default function Admin() {
       {section === "report" && <AdminReport />}
       {section === "explore" && <ReportExplorer />}
       {section === "profit" && <Profitability />}
+      {section === "opps" && <Opportunities />}
       {section === "tasks" && <TaskStats />}
       {section === "projects" && <ProjectManager />}
       {section === "clients" && <ClientManager />}

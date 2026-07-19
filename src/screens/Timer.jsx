@@ -27,12 +27,13 @@ import {
 } from "../lib/icons.jsx";
 import { supabase } from "../lib/supabase";
 import { getThemePref, setThemePref } from "../lib/theme.js";
-import { CHANGELOG, APP_NAME, hasUnseenNews, markNewsSeen } from "../lib/changelog.js";
+import { APP_NAME, visibleChangelog, hasUnseenNews, markNewsSeen } from "../lib/changelog.js";
 
 export default function Timer() {
   const { profile, user, isAdmin, signOut } = useAuth();
   const {
     runningEntry,
+    runningEntries,
     entries,
     favorites,
     startTimer,
@@ -61,9 +62,13 @@ export default function Timer() {
   const [themePref, setThemePrefState] = useState(getThemePref());
   const [goalText, setGoalText] = useState("");
   const [newsOpen, setNewsOpen] = useState(false);
-  const [newsBadge, setNewsBadge] = useState(hasUnseenNews());
+  const [newsBadge, setNewsBadge] = useState(() => hasUnseenNews(isAdmin));
   const [showTree, setShowTree] = useState(() => localStorage.getItem("boschetto_show_tree") !== "0");
   const [calDay, setCalDay] = useState(() => new Date());
+  const [parallelOpen, setParallelOpen] = useState(false);
+  const [parallelDesc, setParallelDesc] = useState("");
+  const [parallelProject, setParallelProject] = useState(null);
+  const [parallelPickerOpen, setParallelPickerOpen] = useState(false);
   const lastRunId = useRef(null);
 
   function toggleTree() {
@@ -173,6 +178,25 @@ export default function Timer() {
     setDraftDesc("");
     setDraftProject(null);
   }
+
+  // Timer in parallelo — riservato agli admin (Kevin, Asia). Avvia un
+  // secondo (o terzo…) timer SENZA fermare quelli già in corso.
+  function onStartParallel() {
+    if (!parallelDesc.trim() && !parallelProject) return;
+    startTimer({
+      description: parallelDesc,
+      project_id: parallelProject,
+      tags: [],
+      billable: projectById(parallelProject)?.billable_default || false,
+      parallel: true,
+    });
+    setParallelDesc("");
+    setParallelProject(null);
+    setParallelOpen(false);
+  }
+
+  // Gli "altri" timer attivi, esclusi quello mostrato in primo piano.
+  const otherRunning = runningEntries.filter((e) => e.id !== runningEntry?.id);
 
   function handleProjectChange(id) {
     setDraftProject(id);
@@ -395,6 +419,35 @@ export default function Timer() {
         </div>
       </div>
 
+      {isAdmin && (
+        <div style={{ marginTop: 14 }}>
+          {otherRunning.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div className="section-label" style={{ marginTop: 2 }}>Altri timer in corso</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {otherRunning.map((e) => (
+                  <ParallelTimerRow
+                    key={e.id}
+                    entry={e}
+                    project={projectById(e.project_id)}
+                    onStop={() => stopTimer(e.id)}
+                    onPause={() => pauseTimer(e.id)}
+                    onResume={() => resumeTimer(e.id)}
+                    onEdit={() => setEditorEntry(e)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {running && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setParallelOpen(true)}>
+              <IconPlus style={{ width: 15, height: 15 }} /> Avvia un secondo timer in parallelo
+            </button>
+          )}
+        </div>
+      )}
+
       <TeamNote />
       {showTree && <GrowthTree userId={user?.id} />}
 
@@ -592,6 +645,49 @@ export default function Timer() {
         />
       )}
 
+      {isAdmin && (
+        <Sheet open={parallelOpen} onClose={() => setParallelOpen(false)} title="Secondo timer in parallelo">
+          <p className="muted" style={{ fontSize: 12.5, marginBottom: 12 }}>
+            Il timer già in corso non si ferma: ne parte un altro accanto. Funzione riservata agli amministratori.
+          </p>
+          <label className="field-label">Cosa stai facendo</label>
+          <input
+            className="field"
+            placeholder="Descrizione (facoltativa)"
+            value={parallelDesc}
+            onChange={(e) => setParallelDesc(e.target.value)}
+            style={{ marginBottom: 10 }}
+          />
+          <label className="field-label">Progetto</label>
+          <button
+            className="field"
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", textAlign: "left", width: "100%" }}
+            onClick={() => setParallelPickerOpen(true)}
+          >
+            <span style={{ display: "flex", alignItems: "center", gap: 9 }}>
+              {parallelProject ? (
+                <>
+                  <span className="entry-dot" style={{ background: projectById(parallelProject)?.color || "#999" }} />
+                  <span style={{ fontWeight: 600 }}>{projectById(parallelProject)?.name}</span>
+                </>
+              ) : (
+                <span className="muted">Nessun progetto</span>
+              )}
+            </span>
+            <IconChevron style={{ width: 15, height: 15, opacity: 0.7 }} />
+          </button>
+          <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 14 }} onClick={onStartParallel}>
+            <IconPlay /> Avvia in parallelo
+          </button>
+          <ProjectPicker
+            open={parallelPickerOpen}
+            onClose={() => setParallelPickerOpen(false)}
+            value={parallelProject}
+            onChange={(id) => setParallelProject(id)}
+          />
+        </Sheet>
+      )}
+
       <Sheet open={accountOpen} onClose={() => setAccountOpen(false)} title="Account">
         <div className="card" style={{ padding: 16, marginBottom: 14 }}>
           <div style={{ fontWeight: 600 }}>{profile?.name || "—"}</div>
@@ -677,7 +773,7 @@ export default function Timer() {
       </Sheet>
 
       <Sheet open={newsOpen} onClose={() => setNewsOpen(false)} title="Novità">
-        {CHANGELOG.map((v) => (
+        {visibleChangelog(isAdmin).map((v) => (
           <div key={v.version} className="card" style={{ padding: 16, marginBottom: 12 }}>
             <div className="row-between" style={{ alignItems: "baseline" }}>
               <div style={{ fontWeight: 700, fontFamily: "var(--font-display)" }}>
@@ -696,16 +792,68 @@ export default function Timer() {
             {v.date && (
               <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
                 Rilascio {new Date(v.date + "T00:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" })}
+                {v.time ? ` alle ${v.time}` : ""}
               </div>
             )}
-            <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 13.5, lineHeight: 1.6, color: "var(--ink-soft)" }}>
-              {v.items.map((it, i) => (
-                <li key={i}>{it}</li>
-              ))}
-            </ul>
+            {v.items?.length > 0 && (
+              <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 13.5, lineHeight: 1.6, color: "var(--ink-soft)" }}>
+                {v.items.map((it, i) => (
+                  <li key={i}>{it}</li>
+                ))}
+              </ul>
+            )}
+            {isAdmin && v.adminItems?.length > 0 && (
+              <>
+                <div className="muted" style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3, marginTop: 10 }}>Solo admin</div>
+                <ul style={{ margin: "4px 0 0", paddingLeft: 18, fontSize: 13.5, lineHeight: 1.6, color: "var(--ink-soft)" }}>
+                  {v.adminItems.map((it, i) => (
+                    <li key={i}>{it}</li>
+                  ))}
+                </ul>
+              </>
+            )}
           </div>
         ))}
       </Sheet>
+    </div>
+  );
+}
+
+// Riga compatta per un timer secondario (parallelo). Ha il proprio
+// intervallo per aggiornare il tempo trascorso senza toccare il resto
+// della schermata.
+function ParallelTimerRow({ entry, project, onStop, onPause, onResume, onEdit }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (entry.paused_at) return;
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [entry.paused_at]);
+
+  const paused = !!entry.paused_at;
+  const secs = entrySeconds(entry);
+
+  return (
+    <div className="card" style={{ padding: "11px 13px", display: "flex", alignItems: "center", gap: 10 }}>
+      <button style={{ flex: 1, minWidth: 0, textAlign: "left" }} onClick={onEdit}>
+        <div style={{ fontWeight: 600, fontSize: 13.5, display: "flex", alignItems: "center", gap: 8 }}>
+          {project && <span className="entry-dot" style={{ background: project.color || "#999" }} />}
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {entry.description || project?.name || "Senza descrizione"}
+          </span>
+        </div>
+        <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+          {fmtDuration(secs)}{paused ? " · in pausa" : ""}
+        </div>
+      </button>
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        {paused ? (
+          <button className="btn btn-soft btn-sm" onClick={onResume} aria-label="Riprendi"><IconPlay style={{ width: 14, height: 14 }} /></button>
+        ) : (
+          <button className="btn btn-soft btn-sm" onClick={onPause} aria-label="Pausa">❚❚</button>
+        )}
+        <button className="btn btn-soft btn-sm" onClick={onStop} aria-label="Ferma"><IconStop style={{ width: 14, height: 14 }} /></button>
+      </div>
     </div>
   );
 }
