@@ -531,7 +531,7 @@ export function DataProvider({ children }) {
   // ---------- Progetti (admin) ----------
   // Gestione progetti/clienti/tariffe: azioni admin che richiedono connessione.
   const addProject = useCallback(
-    async ({ name, color, billable_default, estimated_seconds, billable_rate, client_id }) => {
+    async ({ name, color, billable_default, estimated_seconds, planned_seconds, is_overhead, billable_rate, client_id }) => {
       const { data, error } = await supabase
         .from("projects")
         .insert({
@@ -539,6 +539,8 @@ export function DataProvider({ children }) {
           color,
           billable_default: !!billable_default,
           estimated_seconds: estimated_seconds || null,
+          planned_seconds: planned_seconds || null,
+          is_overhead: !!is_overhead,
           client_id: client_id || null,
           archived: false,
         })

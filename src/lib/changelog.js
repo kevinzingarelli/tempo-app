@@ -1,8 +1,21 @@
 // Novità dell'app, dalla più recente. short = etichetta versione.
-export const CURRENT_VERSION = "12";
+export const CURRENT_VERSION = "13";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "13",
+    date: "2026-07-19",
+    title: "Controllo di gestione: costi e redditività",
+    items: [
+      "Per ogni persona puoi impostare il costo aziendale: come costo orario diretto, oppure dai componenti (RAL, contributi, TFR, altri costi)",
+      "L'app calcola da sola il costo orario gestionale stimato e ne tiene lo storico nel tempo",
+      "Sui progetti puoi indicare le ore pianificate, accanto a quelle stimate e a quelle effettive del timer",
+      "Nuova sezione Redditività: per ogni cliente vedi ricavi, costo del personale e margine di commessa",
+      "I progetti interni/Studio raccolgono le ore generali, ribaltate come costo sui clienti in base alle ore dirette",
+      "Tutti i dati di costo sono visibili solo agli amministratori e sono sempre indicati come stima gestionale interna",
+    ],
+  },
   {
     version: "12",
     date: "2026-07-19",

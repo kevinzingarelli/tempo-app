@@ -384,6 +384,48 @@ create policy calendar_links_own on public.calendar_links
   for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- ============================================================
+--  CONTROLLO DI GESTIONE — COSTO PERSONALE (Boschetto v13, Blocco B)
+--
+--  IMPORTANTE PRIVACY/RUOLI: tutti i dati di costo sono visibili
+--  SOLO agli admin (Kevin, Asia). I dipendenti non vedono mai il
+--  proprio costo aziendale né i margini. Garantito da RLS qui sotto.
+-- ============================================================
+
+-- Componenti del costo aziendale per persona, con storico nel tempo.
+-- Il costo può cambiare (aumenti, straordinari); teniamo la data di
+-- validità così lo storico resta corretto. La riga con valid_from più
+-- recente (<= oggi) è quella attiva.
+create table if not exists public.staff_cost (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  valid_from date not null default current_date,
+  -- Modalità A: costo orario già pronto (es. 31 €/h)
+  cost_per_hour numeric,
+  -- Modalità B: componenti annui (l'app calcola il costo orario teorico)
+  annual_gross numeric,          -- RAL / retribuzione lorda annua
+  contrib_pct numeric,           -- % contributi a carico azienda (es. 24)
+  tfr_pct numeric,               -- % TFR (es. 7.4)
+  other_annual numeric,          -- altri costi annui (assicurazioni, ecc.)
+  -- ore lavorabili annue da contratto (per il costo orario teorico)
+  workable_hours_year numeric,
+  note text,
+  created_at timestamptz default now()
+);
+alter table public.staff_cost enable row level security;
+
+-- SOLO admin: né select né modifica per i non-admin.
+drop policy if exists staff_cost_admin on public.staff_cost;
+create policy staff_cost_admin on public.staff_cost
+  for all using (public.is_admin()) with check (public.is_admin());
+
+-- Ore pianificate sui progetti (accanto a estimated_seconds già esistente).
+alter table public.projects add column if not exists planned_seconds integer;
+
+-- Flag "contenitore overhead": progetti interni/studio le cui ore sono
+-- costi generali da ribaltare sui clienti (es. "Interno/Studio").
+alter table public.projects add column if not exists is_overhead boolean not null default false;
+
+-- ============================================================
 --  FATTO. Database pronto e sicuro.
 --
 --  ULTIMO PASSO — diventare amministratore:

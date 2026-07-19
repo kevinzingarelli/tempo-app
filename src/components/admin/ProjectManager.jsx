@@ -53,6 +53,10 @@ function ProjectForm({ project, onClose }) {
   const [estText, setEstText] = useState(
     project?.estimated_seconds ? fmtDuration(project.estimated_seconds).replace(" ", "") : ""
   );
+  const [plannedText, setPlannedText] = useState(
+    project?.planned_seconds ? fmtDuration(project.planned_seconds).replace(" ", "") : ""
+  );
+  const [isOverhead, setIsOverhead] = useState(project?.is_overhead || false);
   const [budgetText, setBudgetText] = useState(
     project?.budget_seconds ? String(Math.round(project.budget_seconds / 3600)) : ""
   );
@@ -69,6 +73,7 @@ function ProjectForm({ project, onClose }) {
       if (c) cid = c.id;
     }
     const est = estText.trim() ? parseDurationInput(estText) : null;
+    const planned = plannedText.trim() ? parseDurationInput(plannedText) : null;
     const budgetH = budgetText.trim() ? Number(budgetText.replace(",", ".")) : null;
     const payload = {
       name: name.trim(),
@@ -76,6 +81,8 @@ function ProjectForm({ project, onClose }) {
       billable_default: billable,
       client_id: cid || null,
       estimated_seconds: est,
+      planned_seconds: planned,
+      is_overhead: isOverhead,
       budget_seconds:
         budgetH != null && !Number.isNaN(budgetH) && budgetH > 0
           ? Math.round(budgetH * 3600)
@@ -135,9 +142,27 @@ function ProjectForm({ project, onClose }) {
       </div>
 
       <div className="sheet-row">
-        <label className="field-label">Durata attesa del lavoro — opzionale</label>
+        <label className="field-label">Ore pianificate — opzionale</label>
+        <input className="field" placeholder="Es. 20h, 8:30" value={plannedText} autoCapitalize="none" onChange={(e) => setPlannedText(e.target.value)} />
+        <p className="muted" style={{ fontSize: 12, marginTop: 5 }}>Le ore che <b>hai deciso di dedicare</b> a questo lavoro (la tua pianificazione). Diverse dalle "stimate" (quanto pensi durerà) e dalle "effettive" (quelle registrate col timer).</p>
+      </div>
+
+      <div className="sheet-row">
+        <label className="field-label">Durata attesa / stimata — opzionale</label>
         <input className="field" placeholder="Es. 4h, 1:30, 0:45" value={estText} autoCapitalize="none" onChange={(e) => setEstText(e.target.value)} />
-        <p className="muted" style={{ fontSize: 12, marginTop: 5 }}>Quanto dovrebbe durare di solito. Serve a segnalare quando ci si mette molto di più o di meno, finché non c'è abbastanza storico.</p>
+        <p className="muted" style={{ fontSize: 12, marginTop: 5 }}>Quanto dovrebbe durare di solito. Serve a segnalare quando ci si mette molto di più o di meno.</p>
+      </div>
+
+      <div className="sheet-row">
+        <button className="list-action card" style={{ width: "100%" }} onClick={() => setIsOverhead((v) => !v)}>
+          <span>
+            <span style={{ fontWeight: 600 }}>Progetto interno / Studio</span>
+            <span className="muted" style={{ display: "block", fontSize: 12, marginTop: 2 }}>
+              Ore generali non riferite a un cliente (es. amministrazione, riunioni). Verranno ribaltate come costo sui clienti.
+            </span>
+          </span>
+          <Toggle on={isOverhead} />
+        </button>
       </div>
 
       {err && <div className="banner banner-warn">{err}</div>}

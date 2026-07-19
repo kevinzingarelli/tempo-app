@@ -4,6 +4,13 @@ import { useAuth } from "../../state/AuthContext.jsx";
 import { useData } from "../../state/DataContext.jsx";
 import Sheet from "../Sheet.jsx";
 import { IconChevron } from "../../lib/icons.jsx";
+import { hourlyCostFrom, activeCostRecord, DEFAULT_WORKABLE_HOURS_YEAR } from "../../lib/cost.js";
+
+function numOrNull(v) {
+  if (v == null || v === "") return null;
+  const n = parseFloat(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
 
 function Toggle({ on }) {
   return (
@@ -18,11 +25,69 @@ function UserForm({ user, me, onClose, onSaved }) {
   const [name, setName] = useState(user.name || "");
   const [role, setRole] = useState(user.role || "member");
   const [active, setActive] = useState(user.active !== false);
-  const [cost, setCost] = useState(user.cost_rate != null ? String(user.cost_rate) : "");
   const [contract, setContract] = useState(user.contracted_hours_weekly != null ? String(user.contracted_hours_weekly) : "");
   const [leave, setLeave] = useState(user.annual_leave_days != null ? String(user.annual_leave_days) : "");
   const [busy, setBusy] = useState(false);
   const isMe = user.id === me;
+
+  // ---- Costo del personale (staff_cost) ----
+  const [costMode, setCostMode] = useState("diretto"); // diretto | componenti
+  const [cph, setCph] = useState("");                  // costo per ora (modalità diretto)
+  const [gross, setGross] = useState("");              // RAL annua
+  const [contribPct, setContribPct] = useState("24");  // % contributi azienda
+  const [tfrPct, setTfrPct] = useState("7.4");         // % TFR
+  const [otherAnnual, setOtherAnnual] = useState("");  // altri costi annui
+  const [workableH, setWorkableH] = useState("");      // ore lavorabili/anno
+  const [costLoaded, setCostLoaded] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("staff_cost")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("valid_from", { ascending: false });
+      const active = activeCostRecord(data || []);
+      if (active) {
+        if (active.cost_per_hour != null) {
+          setCostMode("diretto");
+          setCph(String(active.cost_per_hour));
+        } else if (active.annual_gross != null) {
+          setCostMode("componenti");
+          setGross(String(active.annual_gross));
+          setContribPct(active.contrib_pct != null ? String(active.contrib_pct) : "24");
+          setTfrPct(active.tfr_pct != null ? String(active.tfr_pct) : "7.4");
+          setOtherAnnual(active.other_annual != null ? String(active.other_annual) : "");
+          setWorkableH(active.workable_hours_year != null ? String(active.workable_hours_year) : "");
+        }
+      } else if (user.cost_rate != null) {
+        // migrazione morbida dal vecchio campo
+        setCostMode("diretto");
+        setCph(String(user.cost_rate));
+      }
+      setCostLoaded(true);
+    })();
+  }, [user.id, user.cost_rate]);
+
+  // anteprima costo orario calcolato
+  const costPreview = (() => {
+    if (costMode === "diretto") {
+      const v = parseFloat((cph || "").replace(",", "."));
+      return Number.isFinite(v) && v > 0 ? v : null;
+    }
+    const rec = {
+      annual_gross: gross, contrib_pct: contribPct, tfr_pct: tfrPct,
+      other_annual: otherAnnual, workable_hours_year: workableH,
+    };
+    const r = hourlyCostFrom({
+      annual_gross: parseFloat((gross || "").replace(",", ".")),
+      contrib_pct: parseFloat((contribPct || "0").replace(",", ".")),
+      tfr_pct: parseFloat((tfrPct || "0").replace(",", ".")),
+      other_annual: parseFloat((otherAnnual || "0").replace(",", ".")),
+      workable_hours_year: parseFloat((workableH || "0").replace(",", ".")),
+    });
+    return r ? r.costPerHour : null;
+  })();
 
   async function save() {
     setBusy(true);
@@ -30,12 +95,47 @@ function UserForm({ user, me, onClose, onSaved }) {
       name: name.trim(),
       role,
       active,
-      cost_rate: cost ? Number(cost.replace(",", ".")) : null,
       contracted_hours_weekly: contract ? Number(contract.replace(",", ".")) : null,
       annual_leave_days: leave ? Number(leave.replace(",", ".")) : null,
     }).eq("id", user.id);
+    if (error) { setBusy(false); toast("Errore: " + error.message, "error"); return; }
+
+    // Salvo/aggiorno il costo del personale come nuovo record datato oggi,
+    // solo se è stato inserito qualcosa. Manteniamo lo storico.
+    const hasCost = (costMode === "diretto" && cph) ||
+                    (costMode === "componenti" && gross);
+    if (hasCost) {
+      const today = new Date().toISOString().slice(0, 10);
+      const row = {
+        user_id: user.id,
+        valid_from: today,
+        cost_per_hour: costMode === "diretto" ? numOrNull(cph) : null,
+        annual_gross: costMode === "componenti" ? numOrNull(gross) : null,
+        contrib_pct: costMode === "componenti" ? numOrNull(contribPct) : null,
+        tfr_pct: costMode === "componenti" ? numOrNull(tfrPct) : null,
+        other_annual: costMode === "componenti" ? numOrNull(otherAnnual) : null,
+        workable_hours_year: costMode === "componenti" ? numOrNull(workableH) : null,
+      };
+      // se esiste già un record con valid_from = oggi lo aggiorno, altrimenti inserisco
+      const { data: existing } = await supabase
+        .from("staff_cost")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("valid_from", today)
+        .maybeSingle();
+      if (existing) {
+        await supabase.from("staff_cost").update(row).eq("id", existing.id);
+      } else {
+        await supabase.from("staff_cost").insert(row);
+      }
+      // aggiorno anche il vecchio campo cost_rate come "costo orario corrente"
+      // così i report esistenti continuano a funzionare senza modifiche
+      if (costPreview != null) {
+        await supabase.from("profiles").update({ cost_rate: Math.round(costPreview * 100) / 100 }).eq("id", user.id);
+      }
+    }
+
     setBusy(false);
-    if (error) { toast("Errore: " + error.message, "error"); return; }
     onSaved();
     onClose();
   }
@@ -69,9 +169,58 @@ function UserForm({ user, me, onClose, onSaved }) {
       </div>
 
       <div className="sheet-row">
-        <label className="field-label">Costo orario azienda (€/ora) — opzionale</label>
-        <input className="field" inputMode="decimal" placeholder="Es. 20" value={cost} onChange={(e) => setCost(e.target.value)} />
-        <p className="muted" style={{ fontSize: 12, marginTop: 5 }}>Quanto ti costa un'ora di questa persona. Serve per calcolare il margine.</p>
+        <label className="field-label">Costo del personale (stima gestionale interna)</label>
+        <div className="segment" style={{ marginBottom: 10 }}>
+          <button className={costMode === "diretto" ? "active" : ""} onClick={() => setCostMode("diretto")}>Costo orario</button>
+          <button className={costMode === "componenti" ? "active" : ""} onClick={() => setCostMode("componenti")}>Da componenti</button>
+        </div>
+
+        {costMode === "diretto" ? (
+          <>
+            <input className="field" inputMode="decimal" placeholder="Es. 31" value={cph} onChange={(e) => setCph(e.target.value)} />
+            <p className="muted" style={{ fontSize: 12, marginTop: 5 }}>Costo aziendale di un'ora di lavoro di questa persona (€/ora), se lo conosci già.</p>
+          </>
+        ) : (
+          <>
+            <div className="grid-2">
+              <div>
+                <label className="field-label" style={{ fontSize: 12 }}>RAL annua lorda (€)</label>
+                <input className="field" inputMode="decimal" placeholder="Es. 22000" value={gross} onChange={(e) => setGross(e.target.value)} />
+              </div>
+              <div>
+                <label className="field-label" style={{ fontSize: 12 }}>Ore lavorabili/anno</label>
+                <input className="field" inputMode="decimal" placeholder={String(DEFAULT_WORKABLE_HOURS_YEAR)} value={workableH} onChange={(e) => setWorkableH(e.target.value)} />
+              </div>
+            </div>
+            <div className="grid-2" style={{ marginTop: 8 }}>
+              <div>
+                <label className="field-label" style={{ fontSize: 12 }}>Contributi azienda (%)</label>
+                <input className="field" inputMode="decimal" placeholder="24" value={contribPct} onChange={(e) => setContribPct(e.target.value)} />
+              </div>
+              <div>
+                <label className="field-label" style={{ fontSize: 12 }}>TFR (%)</label>
+                <input className="field" inputMode="decimal" placeholder="7.4" value={tfrPct} onChange={(e) => setTfrPct(e.target.value)} />
+              </div>
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <label className="field-label" style={{ fontSize: 12 }}>Altri costi annui (€) — assicurazioni, ecc.</label>
+              <input className="field" inputMode="decimal" placeholder="Es. 500" value={otherAnnual} onChange={(e) => setOtherAnnual(e.target.value)} />
+            </div>
+            <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+              Se non indichi le ore lavorabili, uso {DEFAULT_WORKABLE_HOURS_YEAR}h/anno come stima prudente.
+            </p>
+          </>
+        )}
+
+        {costPreview != null && (
+          <div className="card" style={{ padding: "10px 12px", marginTop: 10, background: "var(--brand-soft)" }}>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>≈ {costPreview.toFixed(2)} €/ora</span>
+            <span className="muted" style={{ fontSize: 12, marginLeft: 8 }}>costo orario gestionale stimato</span>
+          </div>
+        )}
+        <p className="muted" style={{ fontSize: 11.5, marginTop: 8 }}>
+          ⚠️ Stima gestionale interna. Il dato ufficiale è quello del consulente del lavoro.
+        </p>
       </div>
 
       <div className="sheet-row">
