@@ -1,8 +1,34 @@
 // Novità dell'app, dalla più recente. short = etichetta versione.
-export const CURRENT_VERSION = "10";
+export const CURRENT_VERSION = "12";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "12",
+    date: "2026-07-19",
+    title: "Albero vivo, lavori a cavallo della notte e assenze",
+    items: [
+      "L'albero dei progressi ora cresce in tempo reale mentre il timer gira, non solo allo stop",
+      "Grafica dell'albero rinnovata, con piccoli scatti di crescita e un leggero ondeggiamento quando lavori",
+      "Ora puoi registrare lavori che iniziano un giorno e finiscono il successivo (es. 22:00 → 02:00)",
+      "La giornata mostra chiaramente i lavori a cavallo della mezzanotte, con 'da ieri' e 'prosegue domani'",
+      "Nelle richieste puoi scegliere il tipo di assenza: ferie, permesso o malattia",
+      "Il calendario mostra icone stagionali sulle ferie (mare d'estate, albero a Natale…) e distingue le chiusure aziendali",
+    ],
+  },
+  {
+    version: "11",
+    date: "2026-07-19",
+    title: "Google Calendar accanto al lavoro",
+    items: [
+      "Nella home: la tua giornata e il calendario Google affiancati",
+      "Naviga tra i giorni e le settimane: si spostano insieme entrambi",
+      "Da un impegno Google crei una voce con un tocco, confermando progetto e cliente",
+      "Boschetto propone un progetto in base ai lavori simili già registrati",
+      "Gli eventi già registrati restano segnati come 'già registrato'",
+      "Su iPhone i due calendari si impilano per restare leggibili",
+    ],
+  },
   {
     version: "10",
     date: "2026-07-19",

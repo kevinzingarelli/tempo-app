@@ -28,6 +28,8 @@ export default function EntryEditor({ open, onClose, entry }) {
 
   const initDate = entry ? toDateInput(entry.started_at) : toDateInput(new Date());
   const [date, setDate] = useState(initDate);
+  const initEndDate = entry?.stopped_at ? toDateInput(entry.stopped_at) : initDate;
+  const [endDate, setEndDate] = useState(initEndDate);
   const [durText, setDurText] = useState(
     entry ? fmtDuration(entry.duration_seconds || 0).replace(" ", "") : ""
   );
@@ -79,9 +81,19 @@ export default function EntryEditor({ open, onClose, entry }) {
       stopped_at = new Date(base.getTime() + secs * 1000).toISOString();
     } else {
       const s = combineDateTime(date, startT);
-      const e = combineDateTime(date, endT);
+      let e = combineDateTime(endDate, endT);
+      // Se la data di fine coincide con l'inizio ma l'orario è precedente/uguale,
+      // interpreto come lavoro che passa la mezzanotte: fine = giorno dopo.
+      if (endDate === date && e <= s) {
+        e = new Date(e.getTime() + 24 * 3600 * 1000);
+      }
       if (e <= s) {
-        setErr("L'orario di fine deve essere dopo l'inizio.");
+        setErr("La fine deve essere dopo l'inizio. Controlla data e ora.");
+        return;
+      }
+      // Limite di sicurezza: niente voci oltre 24h (probabile errore)
+      if (e - s > 24 * 3600 * 1000) {
+        setErr("La durata supera le 24 ore: controlla le date.");
         return;
       }
       started_at = s.toISOString();
@@ -202,7 +214,12 @@ export default function EntryEditor({ open, onClose, entry }) {
           className="field"
           type="date"
           value={date}
-          onChange={(e) => setDate(e.target.value)}
+          onChange={(e) => {
+            const nv = e.target.value;
+            // se la data fine era uguale o precedente, la allineo
+            if (endDate <= date || endDate === date) setEndDate((prev) => (prev < nv ? nv : prev === date ? nv : prev));
+            setDate(nv);
+          }}
           style={{ marginBottom: 12 }}
         />
 
@@ -250,6 +267,7 @@ export default function EntryEditor({ open, onClose, entry }) {
             </div>
           </>
         ) : (
+          <>
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label className="field-label">Inizio</label>
@@ -270,6 +288,39 @@ export default function EntryEditor({ open, onClose, entry }) {
               />
             </div>
           </div>
+          {/* Data di fine (per lavori che finiscono un altro giorno) */}
+          <div style={{ marginTop: 10 }}>
+            <label className="field-label">Data di fine</label>
+            <input
+              className="field"
+              type="date"
+              value={endDate}
+              min={date}
+              onChange={(e) => setEndDate(e.target.value)}
+            />
+            {(() => {
+              // avviso automatico quando attraversa la mezzanotte
+              const s = combineDateTime(date, startT);
+              let e2 = combineDateTime(endDate, endT);
+              const crossMidnight = endDate === date && e2 <= s;
+              if (crossMidnight) {
+                return (
+                  <p className="muted" style={{ fontSize: 12, marginTop: 6, color: "var(--brand)" }}>
+                    🌙 La fine è prima dell'inizio: verrà considerato come lavoro che finisce il giorno dopo.
+                  </p>
+                );
+              }
+              if (endDate > date) {
+                return (
+                  <p className="muted" style={{ fontSize: 12, marginTop: 6, color: "var(--brand)" }}>
+                    🌙 Lavoro a cavallo di più giorni.
+                  </p>
+                );
+              }
+              return null;
+            })()}
+          </div>
+          </>
         )}
       </div>
 

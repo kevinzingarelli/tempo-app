@@ -43,8 +43,16 @@ export default async function handler(req, res) {
     }
 
     // leggo gli eventi (da adesso, prossimi 30 giorni)
-    const timeMin = new Date().toISOString();
-    const timeMax = new Date(Date.now() + 30 * 86400000).toISOString();
+    // Intervallo: se from/to sono passati (YYYY-MM-DD), uso quelli;
+    // altrimenti default = prossimi 30 giorni.
+    let timeMin, timeMax;
+    if (req.query.from && req.query.to) {
+      timeMin = new Date(req.query.from + "T00:00:00").toISOString();
+      timeMax = new Date(req.query.to + "T23:59:59").toISOString();
+    } else {
+      timeMin = new Date().toISOString();
+      timeMax = new Date(Date.now() + 30 * 86400000).toISOString();
+    }
     const calRes = await fetch(
       "https://www.googleapis.com/calendar/v3/calendars/primary/events" +
         `?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}` +

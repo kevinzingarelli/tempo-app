@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { useData } from "../state/DataContext.jsx";
 import EntryEditor from "./EntryEditor.jsx";
-import { entrySeconds, fmtDuration, fmtTime, dayKey, sameDay } from "../lib/format.js";
+import { entrySeconds, fmtDuration, fmtTime, sameDay } from "../lib/format.js";
 
 const HOUR_PX = 56;
 
-export default function DayView() {
+export default function DayView({ day: dayProp, onShiftDay, hideNav }) {
   const { entries, runningEntry, projectById, clientById } = useData();
-  const [day, setDay] = useState(() => new Date());
+  const [dayInternal, setDayInternal] = useState(() => new Date());
+  const day = dayProp || dayInternal;
   const [editorEntry, setEditorEntry] = useState(null);
   const [, setTick] = useState(0);
 
@@ -18,24 +19,32 @@ export default function DayView() {
   }, []);
 
   const isToday = sameDay(day, new Date());
-  const k = dayKey(day);
+  const dayStartBound = new Date(day); dayStartBound.setHours(0, 0, 0, 0);
+  const dayEndBound = new Date(dayStartBound.getTime() + 24 * 3600 * 1000);
 
-  // voci del giorno (incluso il timer in corso se è di oggi)
+  // voci che TOCCANO questo giorno: iniziate oggi, oppure iniziate prima ma
+  // finite oggi/dopo (lavori a cavallo della mezzanotte).
   const items = entries.filter((e) => {
-    if (dayKey(e.started_at) !== k) return false;
-    if (!e.stopped_at && !sameDay(new Date(e.started_at), new Date())) return false;
-    return true;
+    const s = new Date(e.started_at);
+    const end = e.stopped_at ? new Date(e.stopped_at) : now;
+    if (!e.stopped_at && !sameDay(s, new Date())) return false;
+    // si sovrappone all'intervallo del giorno?
+    return s < dayEndBound && end > dayStartBound;
   });
 
   const now = new Date();
 
-  // intervallo ore mostrato: si adatta alle voci
+  // intervallo ore mostrato: si adatta alle voci (clampate al giorno)
   let minH = 8, maxH = 19;
   for (const e of items) {
-    const s = new Date(e.started_at);
-    const end = e.stopped_at ? new Date(e.stopped_at) : now;
+    const s0 = new Date(e.started_at);
+    const end0 = e.stopped_at ? new Date(e.stopped_at) : now;
+    // ritaglio ai confini del giorno visualizzato
+    const s = s0 < dayStartBound ? dayStartBound : s0;
+    const end = end0 > dayEndBound ? dayEndBound : end0;
     minH = Math.min(minH, s.getHours());
-    maxH = Math.max(maxH, end.getHours() + 1);
+    const endHour = end.getTime() >= dayEndBound.getTime() ? 24 : end.getHours() + 1;
+    maxH = Math.max(maxH, endHour);
   }
   if (isToday) maxH = Math.max(maxH, now.getHours() + 1);
   minH = Math.max(0, minH);
@@ -50,17 +59,25 @@ export default function DayView() {
   }
 
   function shiftDay(delta) {
+    if (onShiftDay) { onShiftDay(delta); return; }
     const d = new Date(day);
     d.setDate(d.getDate() + delta);
-    setDay(d);
+    setDayInternal(d);
   }
 
-  const totalSecs = items.reduce((s, e) => s + entrySeconds(e), 0);
+  const totalSecs = items.reduce((sum, e) => {
+    const s0 = new Date(e.started_at);
+    const end0 = e.stopped_at ? new Date(e.stopped_at) : now;
+    const s = s0 < dayStartBound ? dayStartBound : s0;
+    const end = end0 > dayEndBound ? dayEndBound : end0;
+    return sum + Math.max(0, Math.floor((end - s) / 1000));
+  }, 0);
   const hours = [];
   for (let h = minH; h <= maxH; h++) hours.push(h);
 
   return (
     <div>
+      {!hideNav && (
       <div className="week-nav">
         <button className="week-arrow" onClick={() => shiftDay(-1)} aria-label="Giorno precedente">‹</button>
         <div style={{ textAlign: "center" }}>
@@ -75,6 +92,7 @@ export default function DayView() {
         </div>
         <button className="week-arrow" onClick={() => shiftDay(1)} disabled={isToday} aria-label="Giorno successivo">›</button>
       </div>
+      )}
 
       {items.length === 0 && !isToday ? (
         <div className="empty">
@@ -90,8 +108,13 @@ export default function DayView() {
           ))}
 
           {items.map((e) => {
-            const s = new Date(e.started_at);
-            const end = e.stopped_at ? new Date(e.stopped_at) : now;
+            const s0 = new Date(e.started_at);
+            const end0 = e.stopped_at ? new Date(e.stopped_at) : now;
+            // ritaglio visivo ai confini del giorno mostrato
+            const startsBefore = s0 < dayStartBound;
+            const endsAfter = end0 > dayEndBound;
+            const s = startsBefore ? dayStartBound : s0;
+            const end = endsAfter ? dayEndBound : end0;
             const p = projectById(e.project_id);
             const client = p?.client_id ? clientById(p.client_id) : null;
             const top = Math.max(0, yOf(s)) + 10;
@@ -110,12 +133,16 @@ export default function DayView() {
                 onClick={() => setEditorEntry(e)}
               >
                 <div className="b-title">
+                  {startsBefore ? "↑ " : ""}
                   {e.description || p?.name || "Senza descrizione"}
                   {live ? " · in corso" : ""}
                 </div>
                 {height >= 40 && (
                   <div className="b-sub">
-                    {fmtTime(e.started_at)}–{e.stopped_at ? fmtTime(e.stopped_at) : "…"} · {fmtDuration(secs)}
+                    {startsBefore ? "da ieri " : fmtTime(e.started_at)}
+                    {!startsBefore && "–"}
+                    {endsAfter ? "prosegue domani" : (e.stopped_at ? (startsBefore ? "fino " + fmtTime(e.stopped_at) : fmtTime(e.stopped_at)) : "…")}
+                    {" · "}{fmtDuration(secs)}
                     {p && e.description ? ` · ${p.name}` : ""}
                     {client ? ` (${client.name})` : ""}
                   </div>

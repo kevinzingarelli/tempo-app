@@ -239,6 +239,10 @@ create table if not exists public.time_off (
 );
 alter table public.time_off enable row level security;
 
+-- Categoria di assenza (aggiunto in Boschetto v12). Default 'ferie' per
+-- non alterare i dati esistenti. Valori: ferie | permesso | malattia.
+alter table public.time_off add column if not exists kind text not null default 'ferie';
+
 drop policy if exists timeoff_select on public.time_off;
 create policy timeoff_select on public.time_off
   for select using (user_id = auth.uid() or public.is_admin());
@@ -354,6 +358,29 @@ alter table public.google_tokens enable row level security;
 -- può leggere i token altrui: sono dati personali di accesso.
 drop policy if exists google_tokens_own on public.google_tokens;
 create policy google_tokens_own on public.google_tokens
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- ============================================================
+--  COLLEGAMENTO EVENTI GOOGLE -> VOCI (aggiunto in Boschetto v11)
+--  Ricorda quali eventi del calendario sono già stati registrati
+--  come voce di lavoro, e con quale progetto (per proporlo la
+--  prossima volta). Dati personali: ognuno vede solo i propri.
+-- ============================================================
+
+create table if not exists public.calendar_links (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  google_event_id text not null,
+  entry_id uuid references public.time_entries(id) on delete set null,
+  project_id uuid references public.projects(id) on delete set null,
+  event_title text,
+  created_at timestamptz default now(),
+  unique (user_id, google_event_id)
+);
+alter table public.calendar_links enable row level security;
+
+drop policy if exists calendar_links_own on public.calendar_links;
+create policy calendar_links_own on public.calendar_links
   for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- ============================================================

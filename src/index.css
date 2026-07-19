@@ -1188,6 +1188,32 @@ img { -webkit-user-drag: none; user-select: none; }
 .growth-card { padding: 16px; margin-top: 12px; }
 .growth-top { display: flex; align-items: center; gap: 14px; }
 .growth-emoji { font-size: 34px; line-height: 1; flex-shrink: 0; }
+
+/* Albero SVG animato */
+.growth-svg-wrap { flex-shrink: 0; width: 64px; height: 64px; transform-origin: 50% 100%; }
+.growth-svg-wrap.live { animation: gt-sway 4s ease-in-out infinite; }
+.growth-svg-wrap .gt-crown-g { transition: transform 0.8s cubic-bezier(0.22, 1, 0.36, 1); transform-origin: 50% 70%; }
+@keyframes gt-sway {
+  0%, 100% { transform: rotate(-1.2deg); }
+  50% { transform: rotate(1.2deg); }
+}
+.gt-leaf { animation: gt-leaf-in 0.5s ease both; transform-origin: center; }
+@keyframes gt-leaf-in {
+  from { opacity: 0; transform: scale(0); }
+  to { opacity: 1; transform: scale(1); }
+}
+.growth-live {
+  font-size: 10.5px; font-weight: 700; color: var(--ok);
+  background: rgba(47,125,79,0.13); padding: 2px 8px; border-radius: 999px;
+  text-transform: none; letter-spacing: 0;
+}
+.growth-live::before {
+  content: ""; display: inline-block; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--ok); margin-right: 5px;
+  vertical-align: middle; animation: gt-pulse 1.6s ease-in-out infinite;
+}
+@keyframes gt-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
 .growth-bar {
   height: 9px;
   border-radius: 5px;
@@ -1338,3 +1364,47 @@ img { -webkit-user-drag: none; user-select: none; }
 .gcal-ev:last-child { border-bottom: none; }
 .gcal-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); flex-shrink: 0; }
 .link-btn { color: var(--brand); font-weight: 600; text-decoration: underline; }
+
+/* ===== Vista doppia: giornata + Google Calendar ===== */
+.cal-shared-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 14px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: 8px 10px;
+}
+.cal-shared-title { text-align: center; display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+
+.cal-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.cal-duo-col { min-width: 0; }
+
+/* Su schermi stretti (iPhone) le due colonne si impilano */
+@media (max-width: 720px) {
+  .cal-duo { grid-template-columns: 1fr; gap: 20px; }
+}
+
+/* Card evento Google */
+.gcal-col { min-width: 0; }
+.gcal-card {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-md); padding: 11px 12px;
+}
+.gcal-card.done { opacity: 0.62; background: var(--surface-2); }
+.gcal-title { font-weight: 600; font-size: 13.5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gcal-done-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10.5px; font-weight: 700; color: var(--ok);
+  background: rgba(47,125,79,0.13); padding: 2px 7px; border-radius: 999px;
+  text-transform: none; letter-spacing: 0;
+}
+.gcal-add { flex-shrink: 0; }
+
+/* ===== Categorie assenza + grafica stagionale (v12) ===== */
+.cal-season { font-size: 11px; line-height: 1; }
+.lg-company { background: repeating-linear-gradient(45deg, rgba(224,66,75,0.30), rgba(224,66,75,0.30) 3px, rgba(224,66,75,0.12) 3px, rgba(224,66,75,0.12) 6px); border: 1px solid rgba(224,66,75,0.45); }
+.cal-cell.company-closure { position: relative; }
+.cal-cell.company-closure::after {
+  content: ""; position: absolute; inset: 0;
+  background: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(224,66,75,0.10) 4px, rgba(224,66,75,0.10) 8px);
+  border-radius: inherit; pointer-events: none;
+}

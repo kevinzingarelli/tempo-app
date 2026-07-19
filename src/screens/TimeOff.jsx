@@ -50,6 +50,17 @@ function nationalHolidays(year) {
   ];
 }
 
+// Icona stagionale per un giorno di ferie approvate, in base al periodo.
+function seasonalIcon(dateObj) {
+  const m = dateObj.getMonth() + 1;
+  const day = dateObj.getDate();
+  if ((m === 12 && day >= 8) || (m === 1 && day <= 6)) return "🎄"; // Natale
+  if (m >= 6 && m <= 9) return "🏖️"; // estate
+  if (m >= 3 && m <= 5) return "🌸"; // primavera
+  if (m === 10 || m === 11) return "🍂"; // autunno
+  return "⛄"; // inverno
+}
+
 const STATUS = {
   pending: { label: "In attesa", color: "var(--warn)", bg: "rgba(192,127,17,0.14)" },
   approved: { label: "Approvata", color: "var(--ok)", bg: "rgba(47,125,79,0.14)" },
@@ -71,6 +82,7 @@ export default function TimeOff() {
   const [start, setStart] = useState(isoToday());
   const [end, setEnd] = useState(isoToday());
   const [note, setNote] = useState("");
+  const [kind, setKind] = useState("ferie");
   const [sending, setSending] = useState(false);
 
   const [cDay, setCDay] = useState(isoToday());
@@ -112,7 +124,7 @@ export default function TimeOff() {
     setSending(true);
     try {
       const { error } = await supabase.from("time_off").insert({
-        user_id: user.id, start_date: start, end_date: end, note: note.trim() || null,
+        user_id: user.id, start_date: start, end_date: end, kind, note: note.trim() || null,
       });
       if (error) throw error;
       toast("Richiesta inviata. Ora attende l'approvazione.", "ok");
@@ -280,16 +292,21 @@ export default function TimeOff() {
             const my = myStatusFor(d);
             const teamCount = teamApprovedCount(d);
             const today = toISO(d) === isoToday();
+            const isCompanyClosure = clo && clo.label && clo.label !== "Weekend";
             let cls = "cal-cell";
             cls += clo ? " closed" : " open";
             if (today) cls += " today";
+            if (isCompanyClosure) cls += " company-closure";
             const titleTxt = clo?.label || (my ? STATUS[my.status]?.label : "Aperto");
+            const showSeasonal = my?.status === "approved" && (my.kind === "ferie" || !my.kind);
             return (
               <div key={i} className={cls} title={titleTxt}>
                 <span className="cal-daynum">{d.getDate()}</span>
                 <span className="cal-marks">
                   {my?.status === "pending" && <span className="cal-mark mark-pending" />}
-                  {my?.status === "approved" && <span className="cal-mark mark-approved" />}
+                  {showSeasonal && <span className="cal-season" aria-hidden>{seasonalIcon(d)}</span>}
+                  {my?.status === "approved" && my.kind === "permesso" && <span className="cal-season" aria-hidden>🕐</span>}
+                  {my?.status === "approved" && my.kind === "malattia" && <span className="cal-season" aria-hidden>🤒</span>}
                   {teamCount > 0 && !my && <span className="cal-mark mark-team">{teamCount}</span>}
                 </span>
               </div>
@@ -300,9 +317,10 @@ export default function TimeOff() {
 
       <div className="cal-legend">
         <span><span className="lg-dot lg-red" /> Chiuso (weekend / festa)</span>
+        <span><span className="lg-dot lg-company" /> Chiusura aziendale</span>
         <span><span className="lg-dot lg-green" /> Aperto</span>
-        <span><span className="cal-mark mark-pending" /> Richiesta in attesa</span>
-        <span><span className="cal-mark mark-approved" /> Ferie approvate</span>
+        <span><span className="cal-mark mark-pending" /> In attesa</span>
+        <span>🏖️🌸🍂 Ferie · 🕐 Permesso · 🤒 Malattia</span>
         {isAdmin && <span><span className="cal-mark mark-team">N</span> Persone in ferie</span>}
       </div>
 
@@ -375,6 +393,12 @@ export default function TimeOff() {
 
       <div className="section-label" style={{ marginTop: isAdmin ? 26 : 0 }}>Nuova richiesta</div>
       <div className="card" style={{ padding: 16 }}>
+        <label className="field-label">Tipo di assenza</label>
+        <div className="segment" style={{ marginBottom: 12 }}>
+          {[["ferie", "🏖️ Ferie"], ["permesso", "🕐 Permesso"], ["malattia", "🤒 Malattia"]].map(([k, l]) => (
+            <button key={k} className={kind === k ? "active" : ""} onClick={() => setKind(k)}>{l}</button>
+          ))}
+        </div>
         <div className="grid-2">
           <div>
             <label className="field-label">Dal</label>
@@ -387,8 +411,13 @@ export default function TimeOff() {
         </div>
         <div style={{ marginTop: 10 }}>
           <label className="field-label">Nota (facoltativa)</label>
-          <input className="field" placeholder="Es. Vacanza, visita medica…" value={note} onChange={(e) => setNote(e.target.value)} />
+          <input className="field" placeholder={kind === "malattia" ? "Es. giorni di malattia" : "Es. Vacanza, visita medica…"} value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
+        {kind === "malattia" && (
+          <p className="muted" style={{ fontSize: 12, margin: "6px 0 0" }}>
+            Non inserire dettagli sanitari. Serve solo a registrare l'assenza.
+          </p>
+        )}
         <div className="muted" style={{ fontSize: 12.5, margin: "8px 0 12px" }}>
           {daysBetween(start, end)} {daysBetween(start, end) === 1 ? "giorno" : "giorni"} richiesti.
         </div>

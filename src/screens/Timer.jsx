@@ -3,9 +3,9 @@ import { useData } from "../state/DataContext.jsx";
 import { useAuth } from "../state/AuthContext.jsx";
 import EntryRow from "../components/EntryRow.jsx";
 import DayView from "../components/DayView.jsx";
+import DayGoogle from "../components/DayGoogle.jsx";
 import GrowthTree from "../components/GrowthTree.jsx";
 import TeamNote from "../components/TeamNote.jsx";
-import GoogleEvents from "../components/GoogleEvents.jsx";
 import EntryEditor from "../components/EntryEditor.jsx";
 import ProjectPicker from "../components/ProjectPicker.jsx";
 import Sheet from "../components/Sheet.jsx";
@@ -63,6 +63,7 @@ export default function Timer() {
   const [newsOpen, setNewsOpen] = useState(false);
   const [newsBadge, setNewsBadge] = useState(hasUnseenNews());
   const [showTree, setShowTree] = useState(() => localStorage.getItem("boschetto_show_tree") !== "0");
+  const [calDay, setCalDay] = useState(() => new Date());
   const lastRunId = useRef(null);
 
   function toggleTree() {
@@ -395,7 +396,6 @@ export default function Timer() {
       </div>
 
       <TeamNote />
-      <GoogleEvents />
       {showTree && <GrowthTree userId={user?.id} />}
 
       {(() => {
@@ -497,9 +497,39 @@ export default function Timer() {
       </div>{/* /timer-col-main */}
 
       <div className="timer-col-side">
-      {/* Timeline della giornata (come Toggl) */}
-      <div className="section-label" style={{ marginTop: 2 }}>La tua giornata</div>
-      <DayView />
+      {/* Navigazione date condivisa tra i due calendari */}
+      <div className="cal-shared-nav">
+        <div style={{ display: "flex", gap: 6 }}>
+          <button className="cal-arrow cal-arrow-yr" onClick={() => setCalDay((d) => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; })} aria-label="Settimana precedente">«</button>
+          <button className="cal-arrow" onClick={() => setCalDay((d) => { const n = new Date(d); n.setDate(n.getDate() - 1); return n; })} aria-label="Giorno precedente">‹</button>
+        </div>
+        <div className="cal-shared-title">
+          <div className="w-label" style={{ textTransform: "capitalize" }}>
+            {(() => {
+              const isToday = calDay.toDateString() === new Date().toDateString();
+              return isToday ? "Oggi" : calDay.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "short" });
+            })()}
+          </div>
+          <button className="link-btn" style={{ fontSize: 11.5 }} onClick={() => setCalDay(new Date())}>
+            {calDay.toDateString() === new Date().toDateString() ? calDay.getFullYear() : "torna a oggi"}
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button className="cal-arrow" onClick={() => setCalDay((d) => { const n = new Date(d); n.setDate(n.getDate() + 1); return n; })} aria-label="Giorno successivo">›</button>
+          <button className="cal-arrow cal-arrow-yr" onClick={() => setCalDay((d) => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; })} aria-label="Settimana successiva">»</button>
+        </div>
+      </div>
+
+      {/* Due calendari affiancati */}
+      <div className="cal-duo">
+        <div className="cal-duo-col">
+          <div className="section-label" style={{ marginTop: 2 }}>La tua giornata</div>
+          <DayView day={calDay} onShiftDay={(delta) => setCalDay((d) => { const n = new Date(d); n.setDate(n.getDate() + delta); return n; })} hideNav />
+        </div>
+        <div className="cal-duo-col">
+          <DayGoogle day={calDay} />
+        </div>
+      </div>
 
       {/* Ricerca nello storico */}
       {(entries.filter((e) => e.stopped_at).length > 8 || search) && (
