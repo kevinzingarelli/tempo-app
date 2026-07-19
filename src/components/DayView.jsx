@@ -21,6 +21,7 @@ export default function DayView({ day: dayProp, onShiftDay, hideNav }) {
   const isToday = sameDay(day, new Date());
   const dayStartBound = new Date(day); dayStartBound.setHours(0, 0, 0, 0);
   const dayEndBound = new Date(dayStartBound.getTime() + 24 * 3600 * 1000);
+  const now = new Date();
 
   // voci che TOCCANO questo giorno: iniziate oggi, oppure iniziate prima ma
   // finite oggi/dopo (lavori a cavallo della mezzanotte).
@@ -31,8 +32,6 @@ export default function DayView({ day: dayProp, onShiftDay, hideNav }) {
     // si sovrappone all'intervallo del giorno?
     return s < dayEndBound && end > dayStartBound;
   });
-
-  const now = new Date();
 
   // intervallo ore mostrato: si adatta alle voci (clampate al giorno)
   let minH = 8, maxH = 19;
