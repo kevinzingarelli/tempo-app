@@ -20,6 +20,7 @@ function UserForm({ user, me, onClose, onSaved }) {
   const [active, setActive] = useState(user.active !== false);
   const [cost, setCost] = useState(user.cost_rate != null ? String(user.cost_rate) : "");
   const [contract, setContract] = useState(user.contracted_hours_weekly != null ? String(user.contracted_hours_weekly) : "");
+  const [leave, setLeave] = useState(user.annual_leave_days != null ? String(user.annual_leave_days) : "");
   const [busy, setBusy] = useState(false);
   const isMe = user.id === me;
 
@@ -31,6 +32,7 @@ function UserForm({ user, me, onClose, onSaved }) {
       active,
       cost_rate: cost ? Number(cost.replace(",", ".")) : null,
       contracted_hours_weekly: contract ? Number(contract.replace(",", ".")) : null,
+      annual_leave_days: leave ? Number(leave.replace(",", ".")) : null,
     }).eq("id", user.id);
     setBusy(false);
     if (error) { toast("Errore: " + error.message, "error"); return; }
@@ -58,6 +60,12 @@ function UserForm({ user, me, onClose, onSaved }) {
         <label className="field-label">Ore settimanali da contratto</label>
         <input className="field" inputMode="decimal" placeholder="Es. 40" value={contract} onChange={(e) => setContract(e.target.value)} />
         <p className="muted" style={{ fontSize: 12, marginTop: 5 }}>Serve per confrontare le ore fatte con quelle previste.</p>
+      </div>
+
+      <div className="sheet-row">
+        <label className="field-label">Monte ferie annuo (giorni)</label>
+        <input className="field" inputMode="decimal" placeholder="Es. 26" value={leave} onChange={(e) => setLeave(e.target.value)} />
+        <p className="muted" style={{ fontSize: 12, marginTop: 5 }}>Giorni di ferie all'anno per questa persona. L'app sottrae quelli approvati e mostra i residui.</p>
       </div>
 
       <div className="sheet-row">
@@ -89,11 +97,35 @@ export default function UserManager() {
   const [howOpen, setHowOpen] = useState(false);
 
   const load = useCallback(async () => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, name, role, active, cost_rate, contracted_hours_weekly")
-      .order("name");
-    if (data) setPeople(data);
+    const yearStart = `${new Date().getFullYear()}-01-01`;
+    const yearEnd = `${new Date().getFullYear()}-12-31`;
+    const [profRes, offRes] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("id, name, role, active, cost_rate, contracted_hours_weekly, annual_leave_days")
+        .order("name"),
+      supabase
+        .from("time_off")
+        .select("user_id, start_date, end_date, status")
+        .eq("status", "approved")
+        .gte("start_date", yearStart)
+        .lte("start_date", yearEnd),
+    ]);
+    // giorni ferie approvati per persona quest'anno (esclusi sab/dom)
+    const usedByUser = {};
+    for (const r of offRes.data || []) {
+      let d = new Date(r.start_date + "T00:00:00");
+      const end = new Date(r.end_date + "T00:00:00");
+      let count = 0;
+      while (d <= end) {
+        const wd = d.getDay();
+        if (wd !== 0 && wd !== 6) count++;
+        d = new Date(d.getTime() + 86400000);
+      }
+      usedByUser[r.user_id] = (usedByUser[r.user_id] || 0) + count;
+    }
+    const merged = (profRes.data || []).map((p) => ({ ...p, leaveUsed: usedByUser[p.id] || 0 }));
+    setPeople(merged);
     setLoading(false);
   }, []);
 
@@ -115,6 +147,7 @@ export default function UserManager() {
               <span className="muted" style={{ fontSize: 12.5, display: "block" }}>
                 {p.role === "admin" ? "Amministratore" : "Utente"}
                 {p.contracted_hours_weekly ? ` · ${p.contracted_hours_weekly}h/sett` : ""}
+                {p.annual_leave_days != null ? ` · ferie: ${Math.max(0, p.annual_leave_days - p.leaveUsed)}/${p.annual_leave_days} gg` : ""}
                 {p.active === false ? " · disattivato" : ""}
               </span>
             </span>

@@ -1202,41 +1202,56 @@ img { -webkit-user-drag: none; user-select: none; }
   transition: width 0.6s ease;
 }
 
-/* Calendario ferie */
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
-.cal-head { margin-bottom: 6px; }
-.cal-wd { text-align: center; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-faint); }
+/* Calendario ferie — compatto e leggibile su telefono */
+.cal-nav { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 12px; }
+.cal-arrow {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  color: var(--ink); font-size: 18px; font-weight: 700;
+  display: grid; place-items: center; flex-shrink: 0;
+}
+.cal-arrow-yr { font-size: 15px; color: var(--ink-soft); }
+.cal-arrow:active { background: var(--line); }
+.cal-title { flex: 1; text-align: center; display: flex; flex-direction: column; line-height: 1.1; }
+.cal-month { font-weight: 700; font-size: 16px; text-transform: capitalize; }
+.cal-year { font-size: 12px; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-head { margin-bottom: 4px; gap: 3px; }
+.cal-wd { text-align: center; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--ink-faint); }
 .cal-cell {
   position: relative;
   aspect-ratio: 1 / 1;
-  border-radius: 9px;
+  border-radius: 7px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  border: 1.5px solid transparent;
+  gap: 2px;
+  font-size: 12.5px;
+  overflow: hidden;
 }
 .cal-cell.empty { background: transparent; }
 .cal-cell.open { background: var(--brand-soft); }
-.cal-cell.closed { background: rgba(224, 66, 75, 0.10); }
-.cal-cell.has-approved { outline: 2px solid #7fd0c2; outline-offset: -2px; }
-.cal-daynum { font-weight: 600; font-variant-numeric: tabular-nums; }
+.cal-cell.closed { background: rgba(224, 66, 75, 0.12); }
+.cal-cell.today { box-shadow: inset 0 0 0 2px var(--brand); }
+.cal-daynum { font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
 .cal-cell.closed .cal-daynum { color: var(--stop); }
-.cal-badge { font-size: 11px; line-height: 1; margin-top: 2px; }
-.cal-team-dot {
-  position: absolute; bottom: 4px; right: 5px;
-  min-width: 15px; height: 15px; padding: 0 3px;
-  border-radius: 999px; background: var(--brand); color: #fff;
-  font-size: 9.5px; font-weight: 700; display: grid; place-items: center;
+.cal-marks { display: flex; gap: 2px; align-items: center; justify-content: center; min-height: 8px; }
+.cal-mark {
+  display: inline-grid; place-items: center;
+  width: 8px; height: 8px; border-radius: 50%;
+  font-size: 8px; font-weight: 700; line-height: 1;
 }
-.cal-today-ring { position: absolute; inset: 2px; border: 2px solid var(--ink); border-radius: 8px; opacity: 0.5; pointer-events: none; }
-.cal-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; font-size: 12px; color: var(--ink-soft); }
+.mark-pending { background: var(--warn); }
+.mark-approved { background: var(--ok); }
+.mark-team { width: auto; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 999px; background: var(--brand); color: #fff; font-size: 9px; }
+
+.cal-legend { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-top: 12px; font-size: 11.5px; color: var(--ink-soft); }
 .cal-legend > span { display: inline-flex; align-items: center; gap: 6px; }
 .lg-dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
 .lg-red { background: rgba(224, 66, 75, 0.35); }
 .lg-green { background: var(--brand-soft); border: 1px solid var(--brand); }
-.lg-num { background: var(--brand); color: #fff; border-radius: 999px; width: 15px; height: 15px; font-size: 9px; font-weight: 700; display: grid; place-items: center; }
 
 /* Pulsante chiusura pannelli (fix "schermo bloccato" su iPhone) */
 .sheet { position: relative; }
@@ -1280,3 +1295,46 @@ img { -webkit-user-drag: none; user-select: none; }
 .team-note { padding: 16px; margin-top: 12px; border-left: 3px solid var(--brand); }
 .team-note-label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--brand); }
 .team-note-text { font-size: 14px; line-height: 1.5; margin: 8px 0 0; color: var(--ink); white-space: pre-wrap; }
+
+/* Riquadro ferie residue personali */
+.leave-balance { padding: 14px 16px; margin-top: 12px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.leave-num { font-size: 24px; font-weight: 800; font-family: var(--font-display); line-height: 1; color: var(--brand); }
+.leave-den { font-size: 13px; font-weight: 600; color: var(--ink-faint); }
+.leave-bar-wrap { flex: 1; min-width: 100px; height: 8px; border-radius: 5px; background: var(--ring-track); overflow: hidden; }
+.leave-bar { height: 100%; background: var(--warn); border-radius: 5px; }
+
+/* Report Explorer */
+.seg-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 14px; }
+.seg-scroll::-webkit-scrollbar { display: none; }
+.segment-sm { display: inline-flex; min-width: max-content; }
+.segment-sm button { white-space: nowrap; font-size: 13px; padding: 8px 14px; }
+
+.kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.kpi-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 10px; text-align: center; }
+.kpi-val { font-size: 18px; font-weight: 800; font-family: var(--font-display); color: var(--ink); line-height: 1.1; }
+.kpi-lbl { font-size: 11px; color: var(--ink-faint); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.03em; font-weight: 600; }
+
+.hbar-row { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.hbar-row:last-child { border-bottom: none; }
+.hbar-track { height: 8px; border-radius: 5px; background: var(--ring-track); overflow: hidden; }
+.hbar-fill { height: 100%; border-radius: 5px; background: var(--brand); }
+
+/* Ore per giorno della settimana */
+.dow-chart { display: flex; align-items: flex-end; gap: 8px; height: 120px; }
+.dow-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.dow-bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; }
+.dow-bar { width: 100%; background: linear-gradient(180deg, #6fbf8e, var(--brand)); border-radius: 5px 5px 0 0; min-height: 3px; transition: height 0.4s ease; }
+.dow-lbl { font-size: 11px; color: var(--ink-faint); font-weight: 600; margin-top: 6px; }
+
+/* Voci da sistemare */
+.fix-row { display: flex; align-items: center; gap: 12px; padding: 12px; }
+.fix-row + .fix-row { border-top: 1px solid var(--line); }
+.fix-ico { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-weight: 800; flex-shrink: 0; }
+
+/* Google Calendar */
+.gcal-connect { padding: 12px 14px; margin-top: 12px; }
+.gcal-ico { width: 34px; height: 34px; border-radius: 9px; background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; flex-shrink: 0; }
+.gcal-ev { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.gcal-ev:last-child { border-bottom: none; }
+.gcal-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); flex-shrink: 0; }
+.link-btn { color: var(--brand); font-weight: 600; text-decoration: underline; }

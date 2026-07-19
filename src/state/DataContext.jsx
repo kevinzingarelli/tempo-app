@@ -385,7 +385,7 @@ export function DataProvider({ children }) {
 
   // ---------- Voci ----------
   const addEntry = useCallback(
-    async ({ description, project_id, tags, billable, started_at, stopped_at }) => {
+    async ({ description, project_id, tags, billable, note, started_at, stopped_at }) => {
       const dur = Math.max(
         0,
         Math.floor((new Date(stopped_at) - new Date(started_at)) / 1000)
@@ -398,6 +398,7 @@ export function DataProvider({ children }) {
         description: description || "",
         tags: tags || [],
         billable: !!billable,
+        note: note || null,
         started_at,
         stopped_at,
         duration_seconds: dur,

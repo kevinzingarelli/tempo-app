@@ -22,6 +22,7 @@ export default function EntryEditor({ open, onClose, entry }) {
   const [projectId, setProjectId] = useState(entry?.project_id || null);
   const [tags, setTags] = useState(entry?.tags || []);
   const [billable, setBillable] = useState(entry?.billable || false);
+  const [note, setNote] = useState(entry?.note || "");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -60,6 +61,7 @@ export default function EntryEditor({ open, onClose, entry }) {
         project_id: projectId,
         tags,
         billable,
+        note: note.trim() || null,
         started_at: s2.toISOString(),
       });
       onClose();
@@ -91,6 +93,7 @@ export default function EntryEditor({ open, onClose, entry }) {
       project_id: projectId,
       tags,
       billable,
+      note: note.trim() || null,
       started_at,
       stopped_at,
       paused_at: null,
@@ -124,6 +127,18 @@ export default function EntryEditor({ open, onClose, entry }) {
           placeholder="Cosa hai fatto?"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
+        />
+      </div>
+
+      {/* Nota interna */}
+      <div className="sheet-row">
+        <label className="field-label">Nota interna (facoltativa)</label>
+        <textarea
+          className="field"
+          style={{ minHeight: 60, resize: "vertical" }}
+          placeholder="Dettagli utili per il cliente o per te…"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
         />
       </div>
 

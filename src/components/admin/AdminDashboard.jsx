@@ -226,6 +226,25 @@ export default function AdminDashboard() {
   // Fatturabile vs non
   const nonBillableSecs = totalSecs - billableSecs;
 
+  // ---- Ore per giorno della settimana (pattern, senza confronti tra persone) ----
+  const dowSecs = [0, 0, 0, 0, 0, 0, 0]; // Lun..Dom
+  for (const e of entries) {
+    const wd = (new Date(e.started_at).getDay() + 6) % 7;
+    dowSecs[wd] += entrySeconds(e);
+  }
+  const dowMax = Math.max(1, ...dowSecs);
+  const DOW_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+
+  // ---- Voci da sistemare (qualità dati prima di fatturare) ----
+  const noProject = entries.filter((e) => !e.project_id);
+  const noProjectSecs = noProject.reduce((s, e) => s + entrySeconds(e), 0);
+  const billableNoRate = entries.filter((e) => {
+    if (!e.billable || !e.project_id) return false;
+    const rate = projectRate(e.project_id);
+    return !rate || rate <= 0;
+  });
+  const billableNoRateSecs = billableNoRate.reduce((s, e) => s + entrySeconds(e), 0);
+
   const marginColor = margin == null ? "var(--ink)" : margin >= 30 ? "var(--ok)" : margin >= 15 ? "var(--warn)" : "var(--stop)";
 
   return (
@@ -365,6 +384,58 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+        </>
+      )}
+
+      {/* Ore per giorno della settimana */}
+      {totalSecs > 0 && (
+        <>
+          <div className="section-label">Ore per giorno della settimana</div>
+          <div className="card" style={{ padding: "16px 14px" }}>
+            <div className="dow-chart">
+              {dowSecs.map((s, i) => (
+                <div key={i} className="dow-col">
+                  <div className="dow-bar-wrap">
+                    <div className="dow-bar" style={{ height: `${(s / dowMax) * 100}%` }} title={fmtDuration(s)} />
+                  </div>
+                  <div className="dow-lbl">{DOW_LABELS[i]}</div>
+                </div>
+              ))}
+            </div>
+            <p className="muted" style={{ fontSize: 11.5, margin: "10px 0 0", textAlign: "center" }}>
+              Come si distribuiscono le ore nella settimana, nel periodo scelto.
+            </p>
+          </div>
+        </>
+      )}
+
+      {/* Voci da sistemare */}
+      {(noProject.length > 0 || billableNoRate.length > 0) && (
+        <>
+          <div className="section-label">Da sistemare prima di fatturare</div>
+          <div className="card" style={{ padding: 4 }}>
+            {noProject.length > 0 && (
+              <div className="fix-row">
+                <span className="fix-ico" style={{ background: "rgba(192,127,17,0.15)", color: "var(--warn)" }}>!</span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ fontWeight: 600, display: "block" }}>{noProject.length} voci senza progetto</span>
+                  <span className="muted" style={{ fontSize: 12.5 }}>{fmtDuration(noProjectSecs)} non attribuite a un progetto</span>
+                </span>
+              </div>
+            )}
+            {billableNoRate.length > 0 && (
+              <div className="fix-row">
+                <span className="fix-ico" style={{ background: "rgba(224,66,75,0.15)", color: "var(--stop)" }}>€</span>
+                <span style={{ flex: 1 }}>
+                  <span style={{ fontWeight: 600, display: "block" }}>{billableNoRate.length} voci fatturabili senza tariffa</span>
+                  <span className="muted" style={{ fontSize: 12.5 }}>{fmtDuration(billableNoRateSecs)} segnati fatturabili ma il progetto non ha una tariffa</span>
+                </span>
+              </div>
+            )}
+          </div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+            Puoi correggere queste voci in Admin → Report (assegnazione progetto) o nei Progetti (tariffa).
+          </p>
         </>
       )}
 

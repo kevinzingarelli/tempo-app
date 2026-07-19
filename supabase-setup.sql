@@ -25,6 +25,7 @@ create table if not exists public.profiles (
 alter table public.profiles add column if not exists cost_rate numeric;
 alter table public.profiles add column if not exists contracted_hours_weekly numeric;
 alter table public.profiles add column if not exists weekly_goal_hours numeric; -- obiettivo personale, modificabile dall'utente stesso
+alter table public.profiles add column if not exists annual_leave_days numeric; -- monte ferie annuo (giorni), impostato dall'admin
 
 create table if not exists public.projects (
   id               uuid primary key default gen_random_uuid(),
@@ -74,6 +75,8 @@ create table if not exists public.time_entries (
 -- Campi per la funzione "pausa" del timer (aggiunti solo se mancano):
 alter table public.time_entries add column if not exists paused_at timestamptz;
 alter table public.time_entries add column if not exists paused_seconds integer not null default 0;
+-- Nota interna per singola voce (es. dettagli per il cliente):
+alter table public.time_entries add column if not exists note text;
 
 create table if not exists public.favorites (
   id          uuid primary key default gen_random_uuid(),
@@ -330,6 +333,28 @@ create policy entries_delete on public.time_entries
     public.is_admin()
     or (user_id = auth.uid() and started_at::date > coalesce((select locked_until from public.time_lock limit 1), '1900-01-01'::date))
   );
+
+-- ============================================================
+--  GOOGLE CALENDAR (sola lettura) — aggiunto in Boschetto v10
+--  Ogni utente collega il PROPRIO Google e vede i propri eventi
+--  dentro Boschetto. Salviamo solo il necessario, per utente.
+-- ============================================================
+
+create table if not exists public.google_tokens (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  refresh_token text,
+  access_token text,
+  expiry timestamptz,
+  email text,
+  connected_at timestamptz default now()
+);
+alter table public.google_tokens enable row level security;
+
+-- Ognuno vede/gestisce SOLO il proprio token. Nessuno (nemmeno l'admin)
+-- può leggere i token altrui: sono dati personali di accesso.
+drop policy if exists google_tokens_own on public.google_tokens;
+create policy google_tokens_own on public.google_tokens
+  for all using (user_id = auth.uid()) with check (user_id = auth.uid());
 
 -- ============================================================
 --  FATTO. Database pronto e sicuro.

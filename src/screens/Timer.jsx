@@ -5,6 +5,7 @@ import EntryRow from "../components/EntryRow.jsx";
 import DayView from "../components/DayView.jsx";
 import GrowthTree from "../components/GrowthTree.jsx";
 import TeamNote from "../components/TeamNote.jsx";
+import GoogleEvents from "../components/GoogleEvents.jsx";
 import EntryEditor from "../components/EntryEditor.jsx";
 import ProjectPicker from "../components/ProjectPicker.jsx";
 import Sheet from "../components/Sheet.jsx";
@@ -394,6 +395,7 @@ export default function Timer() {
       </div>
 
       <TeamNote />
+      <GoogleEvents />
       {showTree && <GrowthTree userId={user?.id} />}
 
       {(() => {
@@ -594,6 +596,18 @@ export default function Timer() {
             </span>
             <span style={{ width: 46, height: 28, borderRadius: 999, background: showTree ? "var(--ok)" : "var(--line-strong)", position: "relative", flexShrink: 0 }}>
               <span style={{ position: "absolute", top: 3, left: showTree ? 21 : 3, width: 22, height: 22, borderRadius: "50%", background: "#fff", transition: "left .2s" }} />
+            </span>
+          </button>
+        </div>
+
+        <div className="sheet-row">
+          <button className="list-action card" style={{ width: "100%" }} onClick={async () => {
+            try { await fetch(`/api/google-disconnect?uid=${user.id}`); toast("Google Calendar scollegato.", "ok"); }
+            catch { toast("Operazione non riuscita.", "error"); }
+          }}>
+            <span>
+              <span style={{ fontWeight: 600, display: "block" }}>Scollega Google Calendar</span>
+              <span className="muted" style={{ fontSize: 12.5 }}>Rimuove l'accesso ai tuoi eventi</span>
             </span>
           </button>
         </div>

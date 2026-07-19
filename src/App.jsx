@@ -57,41 +57,6 @@ function OfflinePill() {
   );
 }
 
-function OpenTimerReminder({ setTab }) {
-  const { runningEntry, projectById } = useData();
-  const [shown, setShown] = useStateReact(false);
-  const [dismissed, setDismissed] = useStateReact(false);
-
-  // Mostra una sola volta all'avvio, se c'è un timer già aperto
-  useEffectReact(() => {
-    if (runningEntry && !runningEntry.paused_at && !shown) {
-      setShown(true);
-    }
-  }, [runningEntry, shown]);
-
-  if (!shown || dismissed || !runningEntry) return null;
-  const proj = projectById(runningEntry.project_id);
-  return (
-    <div className="reminder-backdrop" onClick={() => setDismissed(true)}>
-      <div className="reminder-card" onClick={(e) => e.stopPropagation()}>
-        <div className="reminder-emoji">⏱️</div>
-        <div className="reminder-title">Hai un timer aperto</div>
-        <div className="reminder-sub">
-          {runningEntry.description || proj?.name || "Lavoro in corso"} sta ancora registrando.
-        </div>
-        <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-          <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setDismissed(true)}>
-            Ho capito
-          </button>
-          <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => { setDismissed(true); setTab("timer"); }}>
-            Vai al timer
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function LongTimerPill({ tab, setTab }) {
   const { runningEntry } = useData();
   const [, tick] = useStateReact(0);
@@ -120,7 +85,6 @@ function MainApp() {
     <DataProvider>
       <div className="app-shell">
         <OfflinePill />
-        <OpenTimerReminder setTab={setTab} />
         <LongTimerPill tab={tab} setTab={setTab} />
         {tab === "timer" && <Timer />}
         {tab === "stats" && <PersonalStats />}

@@ -1,8 +1,25 @@
 // Novità dell'app, dalla più recente. short = etichetta versione.
-export const CURRENT_VERSION = "9";
+export const CURRENT_VERSION = "10";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "10",
+    date: "2026-07-19",
+    title: "Report, ferie e Google Calendar",
+    items: [
+      "Nuovo report Esplora: entri dal cliente o dalla persona e vedi tutto nel dettaglio",
+      "Torta ore per cliente e, per ogni persona, ripartizione tra i clienti",
+      "Scegli il periodo: settimana, mese, anno, dall'inizio o personalizzato",
+      "Calendario ferie rifatto: compatto, con pallini colorati e salto rapido per anno",
+      "Aggiunta la festa patronale di Vasto (San Michele Arcangelo, 29 settembre)",
+      "Ferie residue per persona: imposti il monte annuo, l'app calcola quanto resta",
+      "Collega Google Calendar e vedi i tuoi impegni nella schermata principale",
+      "Note interne sulle singole voci di lavoro",
+      "Ore per giorno della settimana e voci da sistemare prima di fatturare",
+      "Rimosso l'avviso del timer aperto all'apertura (non affidabile come PWA)",
+    ],
+  },
   {
     version: "9",
     date: "2026-07-18",

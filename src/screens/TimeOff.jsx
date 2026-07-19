@@ -42,6 +42,7 @@ function nationalHolidays(year) {
     { day: `${year}-05-01`, label: "Festa dei Lavoratori" },
     { day: `${year}-06-02`, label: "Festa della Repubblica" },
     { day: `${year}-08-15`, label: "Ferragosto" },
+    { day: `${year}-09-29`, label: "San Michele Arcangelo (patrono di Vasto)" },
     { day: `${year}-11-01`, label: "Ognissanti" },
     { day: `${year}-12-08`, label: "Immacolata Concezione" },
     { day: `${year}-12-25`, label: "Natale" },
@@ -58,7 +59,7 @@ const STATUS = {
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 
 export default function TimeOff() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, profile } = useAuth();
   const { toast } = useData();
   const [mine, setMine] = useState([]);
   const [allReq, setAllReq] = useState([]);
@@ -173,6 +174,27 @@ export default function TimeOff() {
   }
 
   const pending = allReq.filter((r) => r.status === "pending");
+
+  // Ferie residue personali (anno corrente, esclusi sab/dom)
+  const myLeaveUsed = (() => {
+    const y = new Date().getFullYear();
+    let used = 0;
+    for (const r of mine) {
+      if (r.status !== "approved") continue;
+      let d = new Date(r.start_date + "T00:00:00");
+      const end = new Date(r.end_date + "T00:00:00");
+      while (d <= end) {
+        if (d.getFullYear() === y) {
+          const wd = d.getDay();
+          if (wd !== 0 && wd !== 6) used++;
+        }
+        d = new Date(d.getTime() + 86400000);
+      }
+    }
+    return used;
+  })();
+  const myLeaveTotal = profile?.annual_leave_days ?? null;
+  const myLeaveLeft = myLeaveTotal != null ? Math.max(0, myLeaveTotal - myLeaveUsed) : null;
   const decided = allReq.filter((r) => r.status !== "pending");
 
   const closureDays = new Set(closures.map((c) => c.day));
@@ -210,6 +232,9 @@ export default function TimeOff() {
   function shiftMonth(delta) {
     setMonth(new Date(year, mIdx + delta, 1));
   }
+  function shiftYear(delta) {
+    setMonth(new Date(year + delta, mIdx, 1));
+  }
   const isCurMonth = year === new Date().getFullYear() && mIdx === new Date().getMonth();
 
   if (loading)
@@ -228,12 +253,15 @@ export default function TimeOff() {
 
       <div className="admin-wide">
       <div>
-      <div className="week-nav">
-        <button className="week-arrow" onClick={() => shiftMonth(-1)} aria-label="Mese precedente">‹</button>
-        <div className="w-label" style={{ textTransform: "capitalize" }}>
-          {month.toLocaleDateString("it-IT", { month: "long", year: "numeric" })}
+      <div className="cal-nav">
+        <button className="cal-arrow cal-arrow-yr" onClick={() => shiftYear(-1)} aria-label="Anno precedente">«</button>
+        <button className="cal-arrow" onClick={() => shiftMonth(-1)} aria-label="Mese precedente">‹</button>
+        <div className="cal-title">
+          <span className="cal-month">{month.toLocaleDateString("it-IT", { month: "long" })}</span>
+          <span className="cal-year">{year}</span>
         </div>
-        <button className="week-arrow" onClick={() => shiftMonth(1)} aria-label="Mese successivo">›</button>
+        <button className="cal-arrow" onClick={() => shiftMonth(1)} aria-label="Mese successivo">›</button>
+        <button className="cal-arrow cal-arrow-yr" onClick={() => shiftYear(1)} aria-label="Anno successivo">»</button>
       </div>
       {!isCurMonth && (
         <button className="btn btn-ghost btn-sm" style={{ marginBottom: 10 }} onClick={() => setMonth(() => { const d = new Date(); d.setDate(1); return d; })}>
@@ -241,7 +269,7 @@ export default function TimeOff() {
         </button>
       )}
 
-      <div className="card" style={{ padding: 14 }}>
+      <div className="card" style={{ padding: 12 }}>
         <div className="cal-grid cal-head">
           {WEEKDAYS.map((w) => <div key={w} className="cal-wd">{w}</div>)}
         </div>
@@ -254,14 +282,16 @@ export default function TimeOff() {
             const today = toISO(d) === isoToday();
             let cls = "cal-cell";
             cls += clo ? " closed" : " open";
-            if (my?.status === "approved") cls += " has-approved";
+            if (today) cls += " today";
+            const titleTxt = clo?.label || (my ? STATUS[my.status]?.label : "Aperto");
             return (
-              <div key={i} className={cls} title={clo?.label || (my ? STATUS[my.status]?.label : "Aperto")}>
-                {today && <span className="cal-today-ring" />}
+              <div key={i} className={cls} title={titleTxt}>
                 <span className="cal-daynum">{d.getDate()}</span>
-                {my?.status === "pending" && <span className="cal-badge">🏖️⏳</span>}
-                {my?.status === "approved" && <span className="cal-badge">🥚</span>}
-                {teamCount > 0 && !my && <span className="cal-team-dot">{teamCount}</span>}
+                <span className="cal-marks">
+                  {my?.status === "pending" && <span className="cal-mark mark-pending" />}
+                  {my?.status === "approved" && <span className="cal-mark mark-approved" />}
+                  {teamCount > 0 && !my && <span className="cal-mark mark-team">{teamCount}</span>}
+                </span>
               </div>
             );
           })}
@@ -271,10 +301,23 @@ export default function TimeOff() {
       <div className="cal-legend">
         <span><span className="lg-dot lg-red" /> Chiuso (weekend / festa)</span>
         <span><span className="lg-dot lg-green" /> Aperto</span>
-        <span>🏖️⏳ Tua richiesta in attesa</span>
-        <span>🥚 Ferie approvate</span>
-        {isAdmin && <span><span className="lg-dot lg-num">N</span> Persone in ferie quel giorno</span>}
+        <span><span className="cal-mark mark-pending" /> Richiesta in attesa</span>
+        <span><span className="cal-mark mark-approved" /> Ferie approvate</span>
+        {isAdmin && <span><span className="cal-mark mark-team">N</span> Persone in ferie</span>}
       </div>
+
+      {myLeaveTotal != null && (
+        <div className="card leave-balance">
+          <div>
+            <div className="leave-num">{myLeaveLeft}<span className="leave-den">/{myLeaveTotal} gg</span></div>
+            <div className="muted" style={{ fontSize: 12.5 }}>Ferie residue quest'anno</div>
+          </div>
+          <div className="leave-bar-wrap">
+            <div className="leave-bar" style={{ width: `${myLeaveTotal ? (myLeaveUsed / myLeaveTotal) * 100 : 0}%` }} />
+          </div>
+          <div className="muted" style={{ fontSize: 11.5 }}>{myLeaveUsed} usati</div>
+        </div>
+      )}
       </div>
 
       <div>
