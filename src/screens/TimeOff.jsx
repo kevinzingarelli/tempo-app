@@ -95,6 +95,7 @@ export default function TimeOff() {
   const [people, setPeople] = useState({});
   const [peopleLeave, setPeopleLeave] = useState({});
   const [profiles, setProfiles] = useState([]);
+  const [filterPerson, setFilterPerson] = useState("all");
   const [closures, setClosures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(() => { const d = new Date(); d.setDate(1); return d; });
@@ -184,6 +185,18 @@ export default function TimeOff() {
         .eq("id", req.id);
       if (error) throw error;
       toast(status === "approved" ? "Ferie approvate." : "Richiesta rifiutata.", "ok");
+      load();
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    }
+  }
+
+  async function deleteRequest(req) {
+    if (!confirm(`Eliminare la richiesta di ${people[req.user_id] || "questa persona"} (${fmtRange(req.start_date, req.end_date)})?\n\nL'assenza sparirà dal calendario. Operazione non annullabile.`)) return;
+    try {
+      const { error } = await supabase.from("time_off").delete().eq("id", req.id);
+      if (error) throw error;
+      toast("Richiesta eliminata.", "ok");
       load();
     } catch (e) {
       toast(friendlyError(e), "error");
@@ -321,6 +334,24 @@ export default function TimeOff() {
     const iso = toISO(dateObj);
     return allReq.filter((r) => r.status === "approved" && iso >= r.start_date && iso <= r.end_date).length;
   }
+  // Elenco assenze del team per un giorno (admin): nome, iniziale, stato, tipo.
+  function teamAbsencesFor(dateObj) {
+    if (!dateObj || !isAdmin) return [];
+    const iso = toISO(dateObj);
+    return allReq
+      .filter((r) => (r.status === "approved" || r.status === "pending") && iso >= r.start_date && iso <= r.end_date)
+      .filter((r) => filterPerson === "all" || r.user_id === filterPerson)
+      .map((r) => {
+        const name = people[r.user_id] || "—";
+        return {
+          id: r.id,
+          name,
+          initial: name.charAt(0).toUpperCase(),
+          status: r.status,
+          kind: r.kind || "ferie",
+        };
+      });
+  }
 
   function shiftMonth(delta) {
     setMonth(new Date(year, mIdx + delta, 1));
@@ -362,6 +393,17 @@ export default function TimeOff() {
         </button>
       )}
 
+      {isAdmin && profiles.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <select className="field" value={filterPerson} onChange={(e) => setFilterPerson(e.target.value)}>
+            <option value="all">Tutte le persone (calendario generale)</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>{p.name || "Senza nome"}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="card" style={{ padding: 12 }}>
         <div className="cal-grid cal-head">
           {WEEKDAYS.map((w) => <div key={w} className="cal-wd">{w}</div>)}
@@ -380,16 +422,31 @@ export default function TimeOff() {
             if (isCompanyClosure) cls += " company-closure";
             const titleTxt = clo?.label || (my ? STATUS[my.status]?.label : "Aperto");
             const showSeasonal = my?.status === "approved" && (my.kind === "ferie" || !my.kind);
+            const teamAbs = isAdmin ? teamAbsencesFor(d) : [];
             return (
               <div key={i} className={cls} title={titleTxt}>
                 <span className="cal-daynum">{d.getDate()}</span>
                 <span className="cal-marks">
-                  {my?.status === "pending" && <span className="cal-mark mark-pending" />}
-                  {showSeasonal && <span className="cal-season" aria-hidden>{seasonalIcon(d)}</span>}
-                  {my?.status === "approved" && my.kind === "permesso" && <span className="cal-season" aria-hidden>🕐</span>}
-                  {my?.status === "approved" && my.kind === "malattia" && <span className="cal-season" aria-hidden>🤒</span>}
-                  {teamCount > 0 && !my && <span className="cal-mark mark-team">{teamCount}</span>}
+                  {!isAdmin && my?.status === "pending" && <span className="cal-mark mark-pending" />}
+                  {!isAdmin && showSeasonal && <span className="cal-season" aria-hidden>{seasonalIcon(d)}</span>}
+                  {!isAdmin && my?.status === "approved" && my.kind === "permesso" && <span className="cal-season" aria-hidden>🕐</span>}
+                  {!isAdmin && my?.status === "approved" && my.kind === "malattia" && <span className="cal-season" aria-hidden>🤒</span>}
                 </span>
+                {isAdmin && teamAbs.length > 0 && (
+                  <span className="cal-people">
+                    {teamAbs.slice(0, 4).map((a) => (
+                      <span
+                        key={a.id}
+                        className={"cal-person " + (a.status === "pending" ? "is-pending" : "is-approved")}
+                        title={`${a.name} · ${a.status === "pending" ? "in attesa" : "approvata"}${a.kind !== "ferie" ? " · " + a.kind : ""}`}
+                      >
+                        {a.status === "pending" ? "🕐" : (a.kind === "permesso" ? "🕐" : a.kind === "malattia" ? "🤒" : "🏖️")}
+                        <span className="cal-person-i">{a.initial}</span>
+                      </span>
+                    ))}
+                    {teamAbs.length > 4 && <span className="cal-person-more">+{teamAbs.length - 4}</span>}
+                  </span>
+                )}
               </div>
             );
           })}
@@ -400,9 +457,16 @@ export default function TimeOff() {
         <span><span className="lg-dot lg-red" /> Chiuso (weekend / festa)</span>
         <span><span className="lg-dot lg-company" /> Chiusura aziendale</span>
         <span><span className="lg-dot lg-green" /> Aperto</span>
-        <span><span className="cal-mark mark-pending" /> In attesa</span>
-        <span>🏖️🌸🍂 Ferie · 🕐 Permesso · 🤒 Malattia</span>
-        {isAdmin && <span><span className="cal-mark mark-team">N</span> Persone in ferie</span>}
+        {!isAdmin && <span><span className="cal-mark mark-pending" /> In attesa</span>}
+        {isAdmin ? (
+          <>
+            <span><span className="cal-person is-approved" style={{ position: "static" }}>🏖️<span className="cal-person-i">D</span></span> Approvata (iniziale)</span>
+            <span><span className="cal-person is-pending" style={{ position: "static" }}>🕐<span className="cal-person-i">D</span></span> In attesa</span>
+            <span>🏖️ Ferie · 🕐 Permesso · 🤒 Malattia</span>
+          </>
+        ) : (
+          <span>🏖️🌸🍂 Ferie · 🕐 Permesso · 🤒 Malattia</span>
+        )}
       </div>
 
       {!isAdmin && myLeaveTotal != null && (
@@ -635,13 +699,20 @@ export default function TimeOff() {
               const st = STATUS[r.status];
               return (
                 <div key={r.id} className="list-action">
-                  <span style={{ minWidth: 0 }}>
+                  <span style={{ minWidth: 0, flex: 1 }}>
                     <span style={{ fontWeight: 600, display: "block" }}>{people[r.user_id] || "—"}</span>
                     <span className="muted" style={{ fontSize: 12.5 }}>{fmtRange(r.start_date, r.end_date)}</span>
                   </span>
                   <span style={{ fontSize: 11.5, fontWeight: 700, color: st.color, background: st.bg, padding: "3px 9px", borderRadius: "var(--r-pill)", flexShrink: 0 }}>
                     {st.label}
                   </span>
+                  <button
+                    onClick={() => deleteRequest(r)}
+                    aria-label="Elimina richiesta"
+                    style={{ marginLeft: 8, width: 28, height: 28, borderRadius: "50%", background: "var(--surface-2)", color: "var(--stop)", fontSize: 15, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    ×
+                  </button>
                 </div>
               );
             })}

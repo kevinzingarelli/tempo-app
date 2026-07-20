@@ -91,13 +91,14 @@ export function DataProvider({ children }) {
     if (proj.data) setProjects(proj.data);
     if (fav.data) setFavorites(fav.data);
 
-    // Dati riservati all'admin: clienti e tariffe cliente
+    // I NOMI dei clienti servono a tutti (per cercare e vedere su cosa si
+    // lavora). La RLS li rende leggibili a ogni utente attivo. I dati
+    // economici (project_finance) restano riservati agli admin.
+    const cliRes = await supabase.from("clients").select("*").order("name");
+    if (cliRes.data) setClients(cliRes.data);
+
     if (isAdmin) {
-      const [cli, fin] = await Promise.all([
-        supabase.from("clients").select("*").order("name"),
-        supabase.from("project_finance").select("*"),
-      ]);
-      if (cli.data) setClients(cli.data);
+      const fin = await supabase.from("project_finance").select("*");
       if (fin.data) {
         const m = {};
         fin.data.forEach((r) => (m[r.project_id] = r.billable_rate));

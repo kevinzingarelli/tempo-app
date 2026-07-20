@@ -5,6 +5,16 @@ import { entrySeconds, fmtDuration } from "../lib/format.js";
 
 // Ogni 10 ore lavorate personali = un passo di crescita "grande" (stadio).
 const HOURS_PER_STAGE = 10;
+
+// Formatta le ore mancanti in modo leggibile: sotto l'ora mostra i minuti
+// (es. "18 min"), sopra mostra ore e minuti (es. "1h 20min").
+function fmtRemain(hours) {
+  const totalMin = Math.round(hours * 60);
+  if (totalMin < 60) return `${totalMin} min`;
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return m > 0 ? `${h}h ${m}min` : `${h}h`;
+}
 // Micro-crescita percepibile ogni 15 minuti.
 const MICRO_STEP_SECS = 15 * 60;
 
@@ -94,7 +104,7 @@ export default function GrowthTree({ userId }) {
         <div className="growth-fill" style={{ width: `${pct}%` }} />
       </div>
       <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-        {isMax ? "Albero completato." : `Prossimo stadio a ${(stageIndex + 1) * HOURS_PER_STAGE}h · mancano ${hoursToNext.toFixed(1)}h`}
+        {isMax ? "Albero completato." : `Prossimo stadio a ${(stageIndex + 1) * HOURS_PER_STAGE}h · mancano ${fmtRemain(hoursToNext)}`}
       </div>
     </div>
   );
@@ -142,39 +152,46 @@ function TreeSVG({ stageIndex, growth, microSteps, live }) {
     <div className={"growth-svg-wrap" + (live ? " live" : "")}>
       <svg viewBox="0 0 100 100" width="72" height="72" role="img" aria-label="Albero dei progressi">
         <defs>
-          {/* Chioma: luce dall'alto-sinistra, ombra in basso-destra (volume 3D) */}
-          <radialGradient id="gt-crown" cx="35%" cy="28%" r="80%">
-            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" />
-            <stop offset="22%" stopColor={leafLight} />
-            <stop offset="72%" stopColor={leafDark} />
-            <stop offset="100%" stopColor={leafDark} stopOpacity="0.95" />
+          {/* Chioma: luce dall'alto-sinistra, ombra profonda in basso-destra */}
+          <radialGradient id="gt-crown" cx="34%" cy="26%" r="85%">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7" />
+            <stop offset="14%" stopColor={leafLight} />
+            <stop offset="55%" stopColor={leafDark} />
+            <stop offset="86%" stopColor={leafDark} />
+            <stop offset="100%" stopColor="#17402a" />
           </radialGradient>
-          <radialGradient id="gt-crown-back" cx="60%" cy="60%" r="75%">
+          <radialGradient id="gt-crown-back" cx="62%" cy="64%" r="78%">
             <stop offset="0%" stopColor={leafDark} />
-            <stop offset="100%" stopColor="#1f5638" />
+            <stop offset="100%" stopColor="#143a26" />
           </radialGradient>
-          {/* Tronco cilindrico: luce a sinistra, ombra a destra */}
+          {/* occlusione ambientale: bordo inferiore più scuro = volume */}
+          <radialGradient id="gt-ao" cx="50%" cy="40%" r="65%">
+            <stop offset="0%" stopColor="#000000" stopOpacity="0" />
+            <stop offset="78%" stopColor="#000000" stopOpacity="0" />
+            <stop offset="100%" stopColor="#0c2c1c" stopOpacity="0.5" />
+          </radialGradient>
+          {/* Tronco cilindrico */}
           <linearGradient id="gt-trunk" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#5f3f24" />
-            <stop offset="32%" stopColor="#a06f42" />
-            <stop offset="55%" stopColor="#8a5c37" />
-            <stop offset="100%" stopColor="#4e3319" />
+            <stop offset="0%" stopColor="#4e3319" />
+            <stop offset="30%" stopColor="#a87747" />
+            <stop offset="50%" stopColor="#9a6a3e" />
+            <stop offset="52%" stopColor="#8a5c37" />
+            <stop offset="100%" stopColor="#3f2813" />
           </linearGradient>
-          <radialGradient id="gt-soil" cx="50%" cy="28%" r="80%">
-            <stop offset="0%" stopColor="#d0a870" />
-            <stop offset="100%" stopColor="#8a6b42" />
+          <radialGradient id="gt-soil" cx="50%" cy="26%" r="82%">
+            <stop offset="0%" stopColor="#d8b078" />
+            <stop offset="100%" stopColor="#7f6039" />
           </radialGradient>
-          {/* Sfumatura morbida per le luci */}
           <filter id="gt-soft" x="-20%" y="-20%" width="140%" height="140%">
             <feGaussianBlur stdDeviation="0.6" />
           </filter>
         </defs>
 
         {/* ombra proiettata a terra (dà profondità) */}
-        <ellipse cx={cx + 3} cy={groundY + 3} rx={crownR * 0.9 + 4} ry="4.5" fill="#000" opacity="0.14" />
+        <ellipse cx={cx + 3} cy={groundY + 3} rx={crownR * 0.9 + 4} ry="4.5" fill="#000" opacity="0.16" />
 
         {/* terreno */}
-        <ellipse cx={cx} cy={groundY + 2} rx="26" ry="5.5" fill="url(#gt-soil)" opacity="0.7" />
+        <ellipse cx={cx} cy={groundY + 2} rx="26" ry="5.5" fill="url(#gt-soil)" opacity="0.75" />
 
         {/* seme (solo stadio 0 con poca crescita) */}
         {stageIndex === 0 && growth < 0.35 ? (
@@ -220,9 +237,13 @@ function TreeSVG({ stageIndex, growth, microSteps, live }) {
                 <circle cx={cx + crownR * 0.52} cy={crownCy - crownR * 0.05} r={crownR * 0.55} fill="url(#gt-crown)" />
                 <circle cx={cx - crownR * 0.55} cy={crownCy - crownR * 0.02} r={crownR * 0.5} fill="url(#gt-crown)" />
                 <circle cx={cx + crownR * 0.05} cy={crownCy - crownR * 0.5} r={crownR * 0.55} fill="url(#gt-crown)" />
+                {/* occlusione ambientale sui bordi (dà volume sferico) */}
+                <circle cx={cx - crownR * 0.14} cy={crownCy + crownR * 0.05} r={crownR} fill="url(#gt-ao)" />
                 {/* luce superiore (highlight volumetrico) */}
                 <circle cx={cx - crownR * 0.2} cy={crownCy - crownR * 0.42} r={crownR * 0.5} fill={leafLight} opacity="0.55" filter="url(#gt-soft)" />
-                <ellipse cx={cx - crownR * 0.45} cy={crownCy - crownR * 0.4} rx={crownR * 0.26} ry={crownR * 0.16} fill="#ffffff" opacity="0.4" filter="url(#gt-soft)" />
+                <ellipse cx={cx - crownR * 0.45} cy={crownCy - crownR * 0.4} rx={crownR * 0.26} ry={crownR * 0.16} fill="#ffffff" opacity="0.45" filter="url(#gt-soft)" />
+                {/* piccolo riflesso speculare in alto a sinistra */}
+                <circle cx={cx - crownR * 0.5} cy={crownCy - crownR * 0.5} r={crownR * 0.1} fill="#ffffff" opacity="0.6" filter="url(#gt-soft)" />
 
                 {/* fiori sullo stadio massimo */}
                 {stageIndex >= 4 &&

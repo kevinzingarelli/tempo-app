@@ -385,17 +385,52 @@ function GoogleTimeline({ events, links, day, minH, maxH, hourPx, onRegister, on
             </div>
           ))}
 
-          {timedEvents.map((ev) => {
+          {(() => {
+            // stesso layout a colonne di DayView per gli eventi sovrapposti
+            const blocks = timedEvents.map((ev) => {
+              const s = new Date(ev.start);
+              const e = ev.end ? new Date(ev.end) : new Date(s.getTime() + 3600000);
+              return { ev, sMs: s.getTime(), eMs: Math.max(e.getTime(), s.getTime() + 1) };
+            }).sort((a, b) => a.sMs - b.sMs);
+            let clusterEnd = -Infinity, cluster = [];
+            const layout = new Map();
+            const flush = () => {
+              const cols = [];
+              for (const b of cluster) {
+                let placed = false;
+                for (let c = 0; c < cols.length; c++) {
+                  if (cols[c] <= b.sMs) { cols[c] = b.eMs; layout.set(b.ev.id, { col: c }); placed = true; break; }
+                }
+                if (!placed) { cols.push(b.eMs); layout.set(b.ev.id, { col: cols.length - 1 }); }
+              }
+              for (const b of cluster) layout.get(b.ev.id).cols = cols.length;
+              cluster = [];
+            };
+            for (const b of blocks) {
+              if (b.sMs >= clusterEnd && cluster.length) flush();
+              cluster.push(b); clusterEnd = Math.max(clusterEnd, b.eMs);
+            }
+            if (cluster.length) flush();
+
+            return timedEvents.map((ev) => {
             const s = new Date(ev.start);
             const e = ev.end ? new Date(ev.end) : new Date(s.getTime() + 3600000);
             const done = !!links[ev.id];
             const top = Math.max(0, yOf(s)) + 10;
             const height = Math.max(26, yOf(e) - yOf(s));
+            const lay = layout.get(ev.id) || { col: 0, cols: 1 };
+            const single = lay.cols <= 1;
             return (
               <button
                 key={ev.id}
-                className={"dv-block gcal-block" + (done ? " done" : "")}
-                style={{ top, height }}
+                className={"dv-block gcal-block" + (done ? " done" : "") + (single ? " dv-full" : "")}
+                style={{
+                  top, height,
+                  ...(single ? {} : {
+                    left: `calc(52px + (100% - 60px) * ${lay.col} / ${lay.cols})`,
+                    width: `calc((100% - 60px) / ${lay.cols} - 4px)`,
+                  }),
+                }}
                 onClick={() => onOpenDetail(ev)}
               >
                 <div className="b-title">
@@ -410,7 +445,8 @@ function GoogleTimeline({ events, links, day, minH, maxH, hourPx, onRegister, on
                 )}
               </button>
             );
-          })}
+            });
+          })()}
         </div>
       )}
     </div>

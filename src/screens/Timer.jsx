@@ -141,6 +141,32 @@ export default function Timer() {
     }
   }, [runningEntry]);
 
+  // Scorciatoie da tastiera (utile da computer): Spazio = pausa/riprendi,
+  // Invio = ferma. Attive solo quando non si sta scrivendo in un campo e
+  // non ci sono pannelli aperti.
+  useEffect(() => {
+    function onKey(e) {
+      const tag = (e.target?.tagName || "").toLowerCase();
+      const typing = tag === "input" || tag === "textarea" || e.target?.isContentEditable;
+      if (typing) return;
+      const anySheetOpen = pickerOpen || accountOpen || newsOpen || addOpen || !!editorEntry || parallelOpen;
+      if (anySheetOpen) return;
+      if (!runningEntry) return;
+
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (runningEntry.paused_at) resumeTimer(runningEntry.id);
+        else pauseTimer(runningEntry.id);
+      } else if (e.code === "Enter") {
+        e.preventDefault();
+        onStop();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runningEntry, pickerOpen, accountOpen, newsOpen, addOpen, editorEntry, parallelOpen]);
+
   const running = !!runningEntry;
   const paused = running && !!runningEntry.paused_at;
   const elapsed = running ? entrySeconds(runningEntry, now) : 0;
@@ -420,6 +446,12 @@ export default function Timer() {
             </>
           )}
         </div>
+        {running && (
+          <div className="kbd-hint">
+            <span><kbd>Spazio</kbd> {paused ? "riprendi" : "pausa"}</span>
+            <span><kbd>Invio</kbd> ferma</span>
+          </div>
+        )}
       </div>
 
       {isAdmin && (
@@ -663,6 +695,8 @@ export default function Timer() {
         onClose={() => setPickerOpen(false)}
         value={draftProject}
         onChange={handleProjectChange}
+        favorites={running ? undefined : favorites}
+        onPickFavorite={running ? undefined : (f) => startFromFavorite(f)}
       />
       {addOpen && <EntryEditor open={addOpen} onClose={() => setAddOpen(false)} />}
       {editorEntry && (

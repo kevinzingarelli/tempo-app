@@ -118,7 +118,41 @@ export default function DayView({ day: dayProp, onShiftDay, hideNav, extMinH, ex
             </div>
           ))}
 
-          {items.map((e) => {
+          {(() => {
+            // Layout a colonne: raggruppo i blocchi che si sovrappongono nel
+            // tempo e li affianco, così non si coprono a vicenda.
+            const blocks = items.map((e) => {
+              const s0 = new Date(e.started_at);
+              const end0 = e.stopped_at ? new Date(e.stopped_at) : now;
+              const s = s0 < dayStartBound ? dayStartBound : s0;
+              const end = end0 > dayEndBound ? dayEndBound : end0;
+              return { e, s0, end0, sMs: s.getTime(), eMs: Math.max(end.getTime(), s.getTime() + 1) };
+            }).sort((a, b) => a.sMs - b.sMs);
+
+            // assegno colonne
+            let clusterEnd = -Infinity;
+            let cluster = [];
+            const layout = new Map(); // e.id -> { col, cols }
+            const flush = () => {
+              const cols = [];
+              for (const b of cluster) {
+                let placed = false;
+                for (let c = 0; c < cols.length; c++) {
+                  if (cols[c] <= b.sMs) { cols[c] = b.eMs; layout.set(b.e.id, { col: c }); placed = true; break; }
+                }
+                if (!placed) { cols.push(b.eMs); layout.set(b.e.id, { col: cols.length - 1 }); }
+              }
+              for (const b of cluster) layout.get(b.e.id).cols = cols.length;
+              cluster = [];
+            };
+            for (const b of blocks) {
+              if (b.sMs >= clusterEnd && cluster.length) flush();
+              cluster.push(b);
+              clusterEnd = Math.max(clusterEnd, b.eMs);
+            }
+            if (cluster.length) flush();
+
+            return items.map((e) => {
             const s0 = new Date(e.started_at);
             const end0 = e.stopped_at ? new Date(e.stopped_at) : now;
             // ritaglio visivo ai confini del giorno mostrato
@@ -132,14 +166,20 @@ export default function DayView({ day: dayProp, onShiftDay, hideNav, extMinH, ex
             const height = Math.max(26, yOf(end) - yOf(s));
             const live = !e.stopped_at;
             const secs = entrySeconds(e);
+            const lay = layout.get(e.id) || { col: 0, cols: 1 };
+            const single = lay.cols <= 1;
             return (
               <button
                 key={e.id}
-                className={"dv-block" + (live ? " live" : "")}
+                className={"dv-block" + (live ? " live" : "") + (single ? " dv-full" : "")}
                 style={{
                   top,
                   height,
                   background: p?.color || "#7a7a85",
+                  ...(single ? {} : {
+                    left: `calc(52px + (100% - 60px) * ${lay.col} / ${lay.cols})`,
+                    width: `calc((100% - 60px) / ${lay.cols} - 4px)`,
+                  }),
                 }}
                 onClick={() => setEditorEntry(e)}
               >
@@ -160,7 +200,8 @@ export default function DayView({ day: dayProp, onShiftDay, hideNav, extMinH, ex
                 )}
               </button>
             );
-          })}
+            });
+          })()}
 
           {isToday && now >= dayStart && (
             <div className="dv-now" style={{ top: yOf(now) + 10 }} />

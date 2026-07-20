@@ -6,7 +6,18 @@ import { IconCheck, IconPlus } from "../lib/icons.jsx";
 
 const QUICK_COLORS = ["#2f7d4f", "#3b6ef5", "#e5a300", "#ff8a3d", "#e5484d", "#b14bd8", "#0ca6a6", "#d8567a"];
 
-export default function ProjectPicker({ open, onClose, value, onChange }) {
+// Normalizza per la ricerca: minuscolo, senza accenti, spazi compattati.
+// Così "Kesia", "kesia", "késia" combaciano tutti.
+function norm(s) {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export default function ProjectPicker({ open, onClose, value, onChange, favorites, onPickFavorite }) {
   const { activeProjects, clientById, entries, addProject, toast } = useData();
   const { isAdmin } = useAuth();
   const [q, setQ] = useState("");
@@ -47,14 +58,29 @@ export default function ProjectPicker({ open, onClose, value, onChange }) {
       .slice(0, 5);
   }, [entries]);
 
-  const query = q.trim().toLowerCase();
+  const query = norm(q);
+
+  // mappa progetto -> descrizioni usate di recente (così cercando una parola
+  // che compare nelle voci passate, es. il nome cliente scritto a mano, il
+  // progetto collegato viene comunque trovato)
+  const descByProject = useMemo(() => {
+    const m = new Map();
+    for (const e of entries) {
+      if (!e.project_id || !e.description) continue;
+      const prev = m.get(e.project_id) || "";
+      if (prev.length < 200) m.set(e.project_id, prev + " " + e.description);
+    }
+    return m;
+  }, [entries]);
+
   const filtered = activeProjects.filter((p) => {
     if (!query) return true;
     const client = p.client_id ? clientById(p.client_id) : null;
-    return (
-      p.name.toLowerCase().includes(query) ||
-      (client && client.name.toLowerCase().includes(query))
+    const haystack = norm(
+      p.name + " " + (client ? client.name : "") + " " + (descByProject.get(p.id) || "")
     );
+    // ogni parola cercata deve comparire (ricerca AND, più tollerante)
+    return query.split(" ").every((w) => haystack.includes(w));
   });
 
   const recent = !query
@@ -142,6 +168,41 @@ export default function ProjectPicker({ open, onClose, value, onChange }) {
       )}
 
       <div className="card">
+        {!query && favorites && favorites.length > 0 && onPickFavorite && (
+          <>
+            <div style={{ padding: "9px 14px 4px", fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--ink-faint)" }}>
+              ⭐ Preferiti
+            </div>
+            {favorites.map((f) => {
+              const client = f.project_id ? clientById(f.project_id) : null;
+              const proj = f.project_id ? activeProjects.find((p) => p.id === f.project_id) : null;
+              return (
+                <button
+                  key={f.id}
+                  className="list-action"
+                  style={{ width: "100%", textAlign: "left" }}
+                  onClick={() => { onPickFavorite(f); onClose(); }}
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+                    <span className="entry-dot" style={{ background: proj?.color || "#bbb" }} />
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ fontWeight: 600, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {f.description || proj?.name || "Preferito"}
+                      </span>
+                      {proj && (
+                        <span className="muted" style={{ fontSize: 12 }}>{proj.name}{client ? ` · ${client.name}` : ""}</span>
+                      )}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+            <div style={{ padding: "9px 14px 4px", fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--ink-faint)" }}>
+              Progetti
+            </div>
+          </>
+        )}
+
         {!query && (
           <button
             className="list-action"

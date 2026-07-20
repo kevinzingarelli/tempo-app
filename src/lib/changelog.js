@@ -2,10 +2,30 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "21";
+export const CURRENT_VERSION = "22";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "22",
+    date: "2026-07-20",
+    time: "12:04",
+    title: "Ricerca, calendario e ferie migliori",
+    items: [
+      "Ricerca progetti finalmente corretta: cerchi per nome cliente (es. Kesia) e lo trovi, anche con accenti o maiuscole diverse",
+      "Quando avvii il timer, i tuoi Preferiti compaiono in cima alla scelta del progetto",
+      "Gli impegni sovrapposti nel calendario ora si affiancano invece di coprirsi, anche a zoom normale",
+      "Da computer: barra spaziatrice mette in pausa/riprende, Invio ferma (con legenda)",
+      "Nell'albero, il tempo che manca al prossimo stadio è mostrato in minuti (es. 18 min)",
+      "Albero dei progressi ancora più curato e tridimensionale",
+    ],
+    adminItems: [
+      "Potete eliminare le richieste ferie gestite (es. se cancellate)",
+      "Per assegnare il ruolo Amministratore ora serve una password, per evitare errori",
+      "Nel calendario ferie vedete le iniziali delle persone assenti: gialla con orologio se in attesa, verde-pettirosso con ombrellone se approvata",
+      "Potete filtrare il calendario ferie per singola persona o vedere quello generale",
+    ],
+  },
   {
     version: "21",
     date: "2026-07-20",

@@ -6,6 +6,12 @@ import Sheet from "../Sheet.jsx";
 import { IconChevron } from "../../lib/icons.jsx";
 import { hourlyCostFrom, activeCostRecord, DEFAULT_WORKABLE_HOURS_YEAR } from "../../lib/cost.js";
 
+// Password richiesta per assegnare il ruolo Amministratore. Serve a evitare
+// di promuovere qualcuno per sbaglio. Non è una barriera di sicurezza forte
+// (chi ispeziona il codice può leggerla): è una conferma volontaria. La vera
+// protezione dei dati resta la RLS di Supabase.
+const ADMIN_ROLE_PASSWORD = "Kesia2025!";
+
 function numOrNull(v) {
   if (v == null || v === "") return null;
   const n = parseFloat(String(v).replace(",", "."));
@@ -24,6 +30,8 @@ function UserForm({ user, me, onClose, onSaved }) {
   const { toast } = useData();
   const [name, setName] = useState(user.name || "");
   const [role, setRole] = useState(user.role || "member");
+  const [adminPromptOpen, setAdminPromptOpen] = useState(false);
+  const [adminPwd, setAdminPwd] = useState("");
   const [active, setActive] = useState(user.active !== false);
   const [contract, setContract] = useState(user.contracted_hours_weekly != null ? String(user.contracted_hours_weekly) : "");
   const [leave, setLeave] = useState(user.annual_leave_days != null ? String(user.annual_leave_days) : "");
@@ -157,9 +165,41 @@ function UserForm({ user, me, onClose, onSaved }) {
         <label className="field-label">Ruolo</label>
         <div className="segment">
           <button className={role === "member" ? "active" : ""} onClick={() => setRole("member")}>Utente</button>
-          <button className={role === "admin" ? "active" : ""} onClick={() => !isMe && setRole("admin")} disabled={isMe}>Admin</button>
+          <button className={role === "admin" ? "active" : ""} onClick={() => { if (!isMe && role !== "admin") setAdminPromptOpen(true); }} disabled={isMe}>Admin</button>
         </div>
         {isMe && <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>Non puoi togliere il ruolo admin a te stesso.</p>}
+        {adminPromptOpen && (
+          <div className="card" style={{ padding: 12, marginTop: 8, borderLeft: "3px solid var(--warn)" }}>
+            <p style={{ fontSize: 13, fontWeight: 600, margin: "0 0 6px" }}>Conferma ruolo Amministratore</p>
+            <p className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>
+              Un amministratore vede costi, redditività e dati di tutti. Inserisci la password admin per confermare.
+            </p>
+            <input
+              type="password"
+              className="field"
+              placeholder="Password admin"
+              value={adminPwd}
+              onChange={(e) => setAdminPwd(e.target.value)}
+            />
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  if (adminPwd === ADMIN_ROLE_PASSWORD) {
+                    setRole("admin");
+                    setAdminPromptOpen(false);
+                    setAdminPwd("");
+                  } else {
+                    toast("Password errata.", "error");
+                  }
+                }}
+              >
+                Conferma
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setAdminPromptOpen(false); setAdminPwd(""); }}>Annulla</button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="sheet-row">

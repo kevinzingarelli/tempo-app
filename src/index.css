@@ -1063,7 +1063,7 @@ img { -webkit-user-drag: none; user-select: none; }
 }
 .dv-block {
   position: absolute;
-  left: 52px; right: 8px;
+  left: 52px; right: auto;
   border-radius: 9px;
   padding: 5px 10px;
   overflow: hidden;
@@ -1072,6 +1072,8 @@ img { -webkit-user-drag: none; user-select: none; }
   box-shadow: var(--shadow-sm);
   border: 1.5px solid rgba(255,255,255,0.25);
 }
+/* singolo blocco a piena larghezza (senza sovrapposizioni) */
+.dv-block.dv-full { right: 8px; width: auto !important; left: 52px !important; }
 .dv-block .b-title {
   font-size: 12.5px;
   font-weight: 700;
@@ -1455,3 +1457,48 @@ img { -webkit-user-drag: none; user-select: none; }
   color: var(--ink);
 }
 .cal-zoom-btn:disabled { opacity: 0.4; }
+
+/* ===== Legenda scorciatoie tastiera (v22) — solo desktop ===== */
+.kbd-hint {
+  display: none;
+  gap: 16px; justify-content: center; margin-top: 12px;
+  font-size: 12px; color: rgba(255,255,255,0.85);
+}
+.kbd-hint kbd {
+  background: rgba(255,255,255,0.22); color: #fff;
+  border-radius: 5px; padding: 2px 7px; font-size: 11px;
+  font-family: var(--font-mono, monospace); font-weight: 600;
+}
+@media (min-width: 900px) and (pointer: fine) {
+  .kbd-hint { display: flex; }
+}
+
+/* ===== Iniziali persone in ferie sul calendario (v22) ===== */
+.cal-people {
+  display: flex; flex-wrap: wrap; gap: 2px;
+  justify-content: center; align-items: center;
+  margin-top: 2px; line-height: 1;
+}
+.cal-person {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px;
+}
+.cal-person-i {
+  font-size: 9px; font-weight: 800;
+  width: 15px; height: 15px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-left: -3px;
+}
+/* Approvata: uovo di pettirosso (verde-azzurro tenue) */
+.cal-person.is-approved .cal-person-i {
+  background: #62c4b0; color: #0b3b32;
+}
+/* In attesa: giallo */
+.cal-person.is-pending .cal-person-i {
+  background: #f2c744; color: #4a3a00;
+}
+.cal-person-more {
+  font-size: 9px; font-weight: 700; color: var(--ink-faint);
+  align-self: center;
+}
