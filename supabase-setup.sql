@@ -205,8 +205,15 @@ drop policy if exists finance_all on public.project_finance;
 create policy finance_all on public.project_finance
   for all using (public.is_admin()) with check (public.is_admin());
 
+-- I clienti (solo il NOME) sono visibili a tutti gli utenti attivi: serve
+-- ai dipendenti per sapere su quale cliente stanno lavorando e per cercarli.
+-- I dati economici NON stanno qui (sono in project_finance, solo admin).
 drop policy if exists clients_all on public.clients;
-create policy clients_all on public.clients
+drop policy if exists clients_select on public.clients;
+drop policy if exists clients_write on public.clients;
+create policy clients_select on public.clients
+  for select using (public.is_active());
+create policy clients_write on public.clients
   for all using (public.is_admin()) with check (public.is_admin());
 
 drop policy if exists entries_select on public.time_entries;

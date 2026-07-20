@@ -18,12 +18,13 @@ function evTimeLabel(ev) {
   return e ? `${f(s)}–${f(e)}` : f(s);
 }
 
-export default function DayGoogle({ day, extMinH, extMaxH, onRange }) {
+export default function DayGoogle({ day, extMinH, extMaxH, onRange, hourPx }) {
   const { user } = useAuth();
-  const { addEntry, projectById, clientById, toast, entries } = useData();
+  const { addEntry, startTimer, projectById, clientById, toast, entries } = useData();
   const [state, setState] = useState({ loading: true, connected: false, events: [], error: null });
   const [links, setLinks] = useState({});
   const [confirmEv, setConfirmEv] = useState(null);
+  const [detailEv, setDetailEv] = useState(null);
   const [pickProject, setPickProject] = useState(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -103,6 +104,33 @@ export default function DayGoogle({ day, extMinH, extMaxH, onRange }) {
     const suggested = suggestProject(ev);
     setConfirmEv(ev);
     setPickProject(suggested || null);
+  }
+
+  async function startEventTimer() {
+    if (!confirmEv) return;
+    setBusy(true);
+    const ev = confirmEv;
+    const proj = pickProject ? projectById(pickProject) : null;
+    await startTimer({
+      description: ev.title,
+      project_id: pickProject || null,
+      tags: [],
+      billable: proj?.billable_default || false,
+    });
+    // segno il collegamento così l'evento risulta gestito
+    await supabase.from("calendar_links").upsert(
+      {
+        user_id: user.id,
+        google_event_id: ev.id,
+        project_id: pickProject || null,
+        event_title: ev.title,
+      },
+      { onConflict: "user_id,google_event_id" }
+    );
+    setBusy(false);
+    setConfirmEv(null);
+    toast("Timer avviato per questo impegno.", "ok");
+    loadLinks();
   }
 
   async function registerEvent() {
@@ -187,9 +215,62 @@ export default function DayGoogle({ day, extMinH, extMaxH, onRange }) {
           day={day}
           minH={minH}
           maxH={maxH}
+          hourPx={hourPx}
           onRegister={openConfirm}
+          onOpenDetail={(ev) => setDetailEv(ev)}
         />
       )}
+
+      {/* Dettaglio completo dell'evento Google */}
+      <Sheet open={!!detailEv} onClose={() => setDetailEv(null)} title="Dettagli impegno">
+        {detailEv && (
+          <>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{detailEv.title}</div>
+            <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>{evTimeLabel(detailEv)}</div>
+
+            {detailEv.location && (
+              <div style={{ marginBottom: 10 }}>
+                <div className="field-label" style={{ fontSize: 11.5 }}>📍 Luogo</div>
+                <div style={{ fontSize: 13.5 }}>{detailEv.location}</div>
+              </div>
+            )}
+            {detailEv.description && (
+              <div style={{ marginBottom: 10 }}>
+                <div className="field-label" style={{ fontSize: 11.5 }}>📝 Descrizione</div>
+                <div style={{ fontSize: 13.5, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{detailEv.description}</div>
+              </div>
+            )}
+            {detailEv.attendees && detailEv.attendees.length > 0 && (
+              <div style={{ marginBottom: 10 }}>
+                <div className="field-label" style={{ fontSize: 11.5 }}>👥 Partecipanti</div>
+                <div style={{ fontSize: 13.5 }}>{detailEv.attendees.join(", ")}</div>
+              </div>
+            )}
+            {detailEv.meetingLink && (
+              <div style={{ marginBottom: 10 }}>
+                <a href={detailEv.meetingLink} target="_blank" rel="noreferrer" className="link-btn" style={{ fontSize: 13.5 }}>
+                  🔗 Apri videochiamata
+                </a>
+              </div>
+            )}
+
+            {!links[detailEv.id] && (
+              <button
+                className="btn btn-primary btn-block btn-lg"
+                style={{ marginTop: 12 }}
+                onClick={() => { const ev = detailEv; setDetailEv(null); openConfirm(ev); }}
+              >
+                <IconPlus style={{ width: 16, height: 16 }} /> Registra o avvia timer
+              </button>
+            )}
+            {links[detailEv.id] && (
+              <div className="muted" style={{ fontSize: 12.5, marginTop: 10, textAlign: "center" }}>
+                Questo impegno è già stato registrato.
+              </div>
+            )}
+          </>
+        )}
+      </Sheet>
 
       <Sheet open={!!confirmEv} onClose={() => setConfirmEv(null)} title="Registra come voce">
         {confirmEv && (
@@ -223,9 +304,15 @@ export default function DayGoogle({ day, extMinH, extMaxH, onRange }) {
               </p>
             )}
 
-            <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 14 }} onClick={registerEvent} disabled={busy}>
-              {busy ? <span className="spinner spinner-white" /> : "Salva voce"}
+            <button className="btn btn-primary btn-block btn-lg" style={{ marginTop: 14 }} onClick={startEventTimer} disabled={busy}>
+              {busy ? <span className="spinner spinner-white" /> : "▶ Avvia timer per questo impegno"}
             </button>
+            <button className="btn btn-ghost btn-block" style={{ marginTop: 8 }} onClick={registerEvent} disabled={busy}>
+              Registra con gli orari dell'evento
+            </button>
+            <p className="muted" style={{ fontSize: 11.5, marginTop: 8, textAlign: "center" }}>
+              "Avvia timer" fa partire il cronometro adesso. "Registra" salva una voce già conclusa con gli orari dell'evento.
+            </p>
           </>
         )}
       </Sheet>
@@ -243,13 +330,14 @@ export default function DayGoogle({ day, extMinH, extMaxH, onRange }) {
 // Timeline oraria con i blocchi degli eventi Google, sulla stessa scala
 // (stessi minH/maxH in ore, stesso HOUR_PX) della colonna "La tua giornata",
 // così le due colonne restano allineate riga per riga.
-function GoogleTimeline({ events, links, day, minH, maxH, onRegister }) {
-  const totalPx = (maxH - minH) * HOUR_PX;
+function GoogleTimeline({ events, links, day, minH, maxH, hourPx, onRegister, onOpenDetail }) {
+  const HPX = hourPx || HOUR_PX;
+  const totalPx = (maxH - minH) * HPX;
   const dayStart = new Date(day);
   dayStart.setHours(minH, 0, 0, 0);
 
   function yOf(date) {
-    return ((date - dayStart) / 3600000) * HOUR_PX;
+    return ((date - dayStart) / 3600000) * HPX;
   }
 
   const timedEvents = events.filter((e) => !e.allDay);
@@ -266,13 +354,13 @@ function GoogleTimeline({ events, links, day, minH, maxH, onRegister }) {
             const done = !!links[ev.id];
             return (
               <div key={ev.id} className={"gcal-card" + (done ? " done" : "")}>
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <button style={{ flex: 1, minWidth: 0, textAlign: "left" }} onClick={() => onOpenDetail(ev)}>
                   <div className="gcal-title">
                     {ev.title}
                     {done && <span className="gcal-done-badge"><IconCheck style={{ width: 12, height: 12 }} /> già registrato</span>}
                   </div>
-                  <div className="muted" style={{ fontSize: 12 }}>Tutto il giorno</div>
-                </div>
+                  <div className="muted" style={{ fontSize: 12 }}>Tutto il giorno · tocca per i dettagli</div>
+                </button>
                 {!done && (
                   <button className="btn btn-soft btn-sm gcal-add" onClick={() => onRegister(ev)}>
                     <IconPlus style={{ width: 15, height: 15 }} /> Registra
@@ -292,7 +380,7 @@ function GoogleTimeline({ events, links, day, minH, maxH, onRegister }) {
       ) : (
         <div className="dayview" style={{ height: totalPx + 20, marginBottom: 8 }}>
           {hours.map((h) => (
-            <div key={h} className="dv-hour" style={{ top: (h - minH) * HOUR_PX + 10 }}>
+            <div key={h} className="dv-hour" style={{ top: (h - minH) * HPX + 10 }}>
               <span>{String(h).padStart(2, "0")}:00</span>
             </div>
           ))}
@@ -308,7 +396,7 @@ function GoogleTimeline({ events, links, day, minH, maxH, onRegister }) {
                 key={ev.id}
                 className={"dv-block gcal-block" + (done ? " done" : "")}
                 style={{ top, height }}
-                onClick={() => !done && onRegister(ev)}
+                onClick={() => onOpenDetail(ev)}
               >
                 <div className="b-title">
                   {ev.title}
@@ -317,7 +405,7 @@ function GoogleTimeline({ events, links, day, minH, maxH, onRegister }) {
                 {height >= 40 && (
                   <div className="b-sub">
                     {evTimeLabel(ev)}{ev.location ? ` · ${ev.location}` : ""}
-                    {!done && " · tocca per registrare"}
+                    {" · tocca per i dettagli"}
                   </div>
                 )}
               </button>

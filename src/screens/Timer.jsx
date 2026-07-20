@@ -70,6 +70,7 @@ export default function Timer() {
   const [parallelProject, setParallelProject] = useState(null);
   const [parallelPickerOpen, setParallelPickerOpen] = useState(false);
   const [dayRange, setDayRange] = useState({ min: null, max: null });
+  const [calZoom, setCalZoom] = useState(1);
   const [googleRange, setGoogleRange] = useState({ min: null, max: null });
   const lastRunId = useRef(null);
 
@@ -176,7 +177,7 @@ export default function Timer() {
     });
   }
   function onStop() {
-    stopTimer();
+    stopTimer(runningEntry?.id);
     setDraftDesc("");
     setDraftProject(null);
   }
@@ -400,7 +401,7 @@ export default function Timer() {
           )}
           {running && !paused && (
             <>
-              <button className="btn btn-pause btn-lg" style={{ flex: 1 }} onClick={pauseTimer}>
+              <button className="btn btn-pause btn-lg" style={{ flex: 1 }} onClick={() => pauseTimer(runningEntry?.id)}>
                 ❚❚ Pausa
               </button>
               <button className="btn btn-stop btn-lg" style={{ flex: 1 }} onClick={onStop}>
@@ -410,7 +411,7 @@ export default function Timer() {
           )}
           {paused && (
             <>
-              <button className="btn btn-resume btn-lg" style={{ flex: 1 }} onClick={resumeTimer}>
+              <button className="btn btn-resume btn-lg" style={{ flex: 1 }} onClick={() => resumeTimer(runningEntry?.id)}>
                 <IconPlay /> Riprendi
               </button>
               <button className="btn btn-stop btn-lg" style={{ flex: 1 }} onClick={onStop}>
@@ -575,6 +576,16 @@ export default function Timer() {
         </div>
       </div>
 
+      {/* Zoom della timeline: utile quando ci sono impegni sovrapposti */}
+      <div className="cal-zoom">
+        <button className="cal-zoom-btn" onClick={() => setCalZoom((z) => Math.max(0.6, Math.round((z - 0.3) * 10) / 10))} aria-label="Riduci zoom" disabled={calZoom <= 0.6}>−</button>
+        <span className="muted" style={{ fontSize: 12 }}>Zoom {Math.round(calZoom * 100)}%</span>
+        <button className="cal-zoom-btn" onClick={() => setCalZoom((z) => Math.min(2.5, Math.round((z + 0.3) * 10) / 10))} aria-label="Aumenta zoom" disabled={calZoom >= 2.5}>+</button>
+        {calZoom !== 1 && (
+          <button className="link-btn" style={{ fontSize: 12, marginLeft: 4 }} onClick={() => setCalZoom(1)}>reimposta</button>
+        )}
+      </div>
+
       {/* Due calendari affiancati, sulla stessa scala oraria (unione dei
           range di lavoro e impegni Google, così le righe combaciano) */}
       <div className="cal-duo">
@@ -586,6 +597,7 @@ export default function Timer() {
             hideNav
             extMinH={googleRange.min}
             extMaxH={googleRange.max}
+            hourPx={56 * calZoom}
             onRange={(min, max) => setDayRange((r) => (r.min === min && r.max === max ? r : { min, max }))}
           />
         </div>
@@ -594,6 +606,7 @@ export default function Timer() {
             day={calDay}
             extMinH={dayRange.min ?? 8}
             extMaxH={dayRange.max ?? 19}
+            hourPx={56 * calZoom}
             onRange={(min, max) => setGoogleRange((r) => (r.min === min && r.max === max ? r : { min, max }))}
           />
         </div>

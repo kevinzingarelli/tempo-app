@@ -2,10 +2,35 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "19";
+export const CURRENT_VERSION = "21";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "21",
+    date: "2026-07-20",
+    time: "08:44",
+    title: "Zoom sul calendario",
+    items: [
+      "Sopra i due calendari trovi ora +/- per ingrandire o rimpicciolire la timeline",
+      "Utile quando due o più impegni si sovrappongono: ingrandendo si vedono meglio",
+    ],
+    adminItems: [],
+  },
+  {
+    version: "20",
+    date: "2026-07-20",
+    time: "08:40",
+    title: "Correzioni e calendario migliore",
+    items: [
+      "Risolto: il tasto Pausa ora funziona di nuovo per tutti",
+      "Risolto: ora tutti possono cercare e vedere i clienti collegati ai progetti",
+      "Tocca un impegno di Google Calendar per vederne descrizione, luogo, partecipanti e link",
+      "Da un impegno di Google puoi far partire il timer subito, oltre a registrarlo con gli orari fissi",
+      "L'albero dei progressi ora ha un aspetto più tridimensionale e curato",
+    ],
+    adminItems: [],
+  },
   {
     version: "19",
     date: "2026-07-20",

@@ -140,25 +140,41 @@ function TreeSVG({ stageIndex, growth, microSteps, live }) {
 
   return (
     <div className={"growth-svg-wrap" + (live ? " live" : "")}>
-      <svg viewBox="0 0 100 100" width="64" height="64" role="img" aria-label="Albero dei progressi">
+      <svg viewBox="0 0 100 100" width="72" height="72" role="img" aria-label="Albero dei progressi">
         <defs>
-          <radialGradient id="gt-crown" cx="38%" cy="32%" r="72%">
-            <stop offset="0%" stopColor={leafLight} />
-            <stop offset="100%" stopColor={leafDark} />
+          {/* Chioma: luce dall'alto-sinistra, ombra in basso-destra (volume 3D) */}
+          <radialGradient id="gt-crown" cx="35%" cy="28%" r="80%">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" />
+            <stop offset="22%" stopColor={leafLight} />
+            <stop offset="72%" stopColor={leafDark} />
+            <stop offset="100%" stopColor={leafDark} stopOpacity="0.95" />
           </radialGradient>
+          <radialGradient id="gt-crown-back" cx="60%" cy="60%" r="75%">
+            <stop offset="0%" stopColor={leafDark} />
+            <stop offset="100%" stopColor="#1f5638" />
+          </radialGradient>
+          {/* Tronco cilindrico: luce a sinistra, ombra a destra */}
           <linearGradient id="gt-trunk" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#7a5433" />
-            <stop offset="50%" stopColor="#9c6b41" />
-            <stop offset="100%" stopColor="#6b4a2c" />
+            <stop offset="0%" stopColor="#5f3f24" />
+            <stop offset="32%" stopColor="#a06f42" />
+            <stop offset="55%" stopColor="#8a5c37" />
+            <stop offset="100%" stopColor="#4e3319" />
           </linearGradient>
-          <radialGradient id="gt-soil" cx="50%" cy="30%" r="80%">
-            <stop offset="0%" stopColor="#c9a06a" />
-            <stop offset="100%" stopColor="#9c7b4e" />
+          <radialGradient id="gt-soil" cx="50%" cy="28%" r="80%">
+            <stop offset="0%" stopColor="#d0a870" />
+            <stop offset="100%" stopColor="#8a6b42" />
           </radialGradient>
+          {/* Sfumatura morbida per le luci */}
+          <filter id="gt-soft" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="0.6" />
+          </filter>
         </defs>
 
+        {/* ombra proiettata a terra (dà profondità) */}
+        <ellipse cx={cx + 3} cy={groundY + 3} rx={crownR * 0.9 + 4} ry="4.5" fill="#000" opacity="0.14" />
+
         {/* terreno */}
-        <ellipse cx={cx} cy={groundY + 2} rx="24" ry="5" fill="url(#gt-soil)" opacity="0.55" />
+        <ellipse cx={cx} cy={groundY + 2} rx="26" ry="5.5" fill="url(#gt-soil)" opacity="0.7" />
 
         {/* seme (solo stadio 0 con poca crescita) */}
         {stageIndex === 0 && growth < 0.35 ? (
@@ -179,6 +195,12 @@ function TreeSVG({ stageIndex, growth, microSteps, live }) {
                   Q${cx + trunkW / 2 + 1},${trunkTop + trunkH * 0.4} ${cx + trunkW / 2},${groundY} Z`}
               fill="url(#gt-trunk)"
             />
+            {/* riflesso di luce sul tronco (cilindricità) */}
+            <path
+              d={`M${cx - trunkW * 0.22},${groundY - 1}
+                  L${cx - trunkW * 0.12},${trunkTop + 1}`}
+              stroke="#c89058" strokeWidth={trunkW * 0.18} strokeLinecap="round" opacity="0.5"
+            />
             {/* rami (dallo stadio 2) */}
             {stageIndex >= 2 && (
               <>
@@ -189,27 +211,38 @@ function TreeSVG({ stageIndex, growth, microSteps, live }) {
 
             {showCrown && (
               <g className="gt-crown-g">
-                {/* strato posteriore (più scuro, profondità) */}
-                <circle cx={cx + crownR * 0.28} cy={crownCy + crownR * 0.12} r={crownR * 0.82} fill={leafDark} opacity="0.9" />
-                {/* strato principale */}
-                <circle cx={cx - crownR * 0.18} cy={crownCy} r={crownR} fill="url(#gt-crown)" />
-                {/* strato superiore (luce) */}
-                <circle cx={cx - crownR * 0.05} cy={crownCy - crownR * 0.34} r={crownR * 0.62} fill={leafLight} opacity="0.85" />
-                {/* riflesso */}
-                <ellipse cx={cx - crownR * 0.42} cy={crownCy - crownR * 0.3} rx={crownR * 0.22} ry={crownR * 0.14} fill="#ffffff" opacity="0.25" />
+                {/* sfere posteriori (profondità, più scure) */}
+                <circle cx={cx + crownR * 0.42} cy={crownCy + crownR * 0.22} r={crownR * 0.68} fill="url(#gt-crown-back)" />
+                <circle cx={cx - crownR * 0.5} cy={crownCy + crownR * 0.15} r={crownR * 0.6} fill="url(#gt-crown-back)" />
+                {/* massa principale */}
+                <circle cx={cx - crownR * 0.14} cy={crownCy + crownR * 0.05} r={crownR} fill="url(#gt-crown)" />
+                {/* lobi laterali per un contorno "a grappolo" */}
+                <circle cx={cx + crownR * 0.52} cy={crownCy - crownR * 0.05} r={crownR * 0.55} fill="url(#gt-crown)" />
+                <circle cx={cx - crownR * 0.55} cy={crownCy - crownR * 0.02} r={crownR * 0.5} fill="url(#gt-crown)" />
+                <circle cx={cx + crownR * 0.05} cy={crownCy - crownR * 0.5} r={crownR * 0.55} fill="url(#gt-crown)" />
+                {/* luce superiore (highlight volumetrico) */}
+                <circle cx={cx - crownR * 0.2} cy={crownCy - crownR * 0.42} r={crownR * 0.5} fill={leafLight} opacity="0.55" filter="url(#gt-soft)" />
+                <ellipse cx={cx - crownR * 0.45} cy={crownCy - crownR * 0.4} rx={crownR * 0.26} ry={crownR * 0.16} fill="#ffffff" opacity="0.4" filter="url(#gt-soft)" />
 
                 {/* fiori sullo stadio massimo */}
                 {stageIndex >= 4 &&
-                  [0, 1, 2, 3, 4].map((i) => {
-                    const a = (i / 5) * Math.PI * 2;
+                  [0, 1, 2, 3, 4, 5].map((i) => {
+                    const a = (i / 6) * Math.PI * 2;
                     return (
-                      <circle
-                        key={i}
-                        cx={cx - crownR * 0.05 + Math.cos(a) * crownR * 0.55}
-                        cy={crownCy - crownR * 0.05 + Math.sin(a) * crownR * 0.5}
-                        r="2.4"
-                        fill="#ffd1e3"
-                      />
+                      <g key={i}>
+                        <circle
+                          cx={cx - crownR * 0.1 + Math.cos(a) * crownR * 0.6}
+                          cy={crownCy - crownR * 0.05 + Math.sin(a) * crownR * 0.55}
+                          r="2.6"
+                          fill="#ffd1e3"
+                        />
+                        <circle
+                          cx={cx - crownR * 0.1 + Math.cos(a) * crownR * 0.6}
+                          cy={crownCy - crownR * 0.05 + Math.sin(a) * crownR * 0.55}
+                          r="1"
+                          fill="#ff9ec4"
+                        />
+                      </g>
                     );
                   })}
 

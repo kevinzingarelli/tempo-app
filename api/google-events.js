@@ -69,6 +69,12 @@ export default async function handler(req, res) {
       end: ev.end?.dateTime || ev.end?.date,
       allDay: !ev.start?.dateTime,
       location: ev.location || null,
+      description: ev.description || null,
+      attendees: Array.isArray(ev.attendees)
+        ? ev.attendees.map((a) => a.displayName || a.email).filter(Boolean)
+        : [],
+      meetingLink: ev.hangoutLink || null,
+      organizer: ev.organizer?.displayName || ev.organizer?.email || null,
     }));
     res.status(200).json({ connected: true, email: token.email, events });
   } catch (e) {

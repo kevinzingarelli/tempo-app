@@ -1190,7 +1190,7 @@ img { -webkit-user-drag: none; user-select: none; }
 .growth-emoji { font-size: 34px; line-height: 1; flex-shrink: 0; }
 
 /* Albero SVG animato */
-.growth-svg-wrap { flex-shrink: 0; width: 64px; height: 64px; transform-origin: 50% 100%; }
+.growth-svg-wrap { flex-shrink: 0; width: 72px; height: 72px; transform-origin: 50% 100%; }
 .growth-svg-wrap.live { animation: gt-sway 4s ease-in-out infinite; }
 .growth-svg-wrap .gt-crown-g { transition: transform 0.8s cubic-bezier(0.22, 1, 0.36, 1); transform-origin: 50% 70%; }
 @keyframes gt-sway {
@@ -1441,3 +1441,17 @@ img { -webkit-user-drag: none; user-select: none; }
 /* Blocco Google nella timeline oraria (v19: allineata a "La tua giornata") */
 .gcal-block { opacity: 0.94; }
 .gcal-block.done { opacity: 0.55; filter: grayscale(0.3); cursor: default; }
+
+/* ===== Zoom timeline (v21) ===== */
+.cal-zoom {
+  display: flex; align-items: center; gap: 8px; justify-content: center;
+  margin-bottom: 10px;
+}
+.cal-zoom-btn {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--surface-2); border: 1px solid var(--line);
+  font-size: 16px; font-weight: 700; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ink);
+}
+.cal-zoom-btn:disabled { opacity: 0.4; }

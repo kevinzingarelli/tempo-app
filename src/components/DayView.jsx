@@ -5,8 +5,9 @@ import { entrySeconds, fmtDuration, fmtTime, sameDay } from "../lib/format.js";
 
 export const HOUR_PX = 56;
 
-export default function DayView({ day: dayProp, onShiftDay, hideNav, extMinH, extMaxH, onRange }) {
+export default function DayView({ day: dayProp, onShiftDay, hideNav, extMinH, extMaxH, onRange, hourPx }) {
   const { entries, runningEntry, projectById, clientById } = useData();
+  const HPX = hourPx || HOUR_PX;
   const [dayInternal, setDayInternal] = useState(() => new Date());
   const day = dayProp || dayInternal;
   const [editorEntry, setEditorEntry] = useState(null);
@@ -55,7 +56,7 @@ export default function DayView({ day: dayProp, onShiftDay, hideNav, extMinH, ex
   if (typeof extMinH === "number") minH = Math.min(minH, extMinH);
   if (typeof extMaxH === "number") maxH = Math.max(maxH, extMaxH);
 
-  const totalPx = (maxH - minH) * HOUR_PX;
+  const totalPx = (maxH - minH) * HPX;
 
   useEffect(() => {
     if (onRange) onRange(rawMinH, rawMaxH);
@@ -65,7 +66,7 @@ export default function DayView({ day: dayProp, onShiftDay, hideNav, extMinH, ex
   dayStart.setHours(minH, 0, 0, 0);
 
   function yOf(date) {
-    return ((date - dayStart) / 3600000) * HOUR_PX;
+    return ((date - dayStart) / 3600000) * HPX;
   }
 
   function shiftDay(delta) {
@@ -112,7 +113,7 @@ export default function DayView({ day: dayProp, onShiftDay, hideNav, extMinH, ex
       ) : (
         <div className="dayview" style={{ height: totalPx + 20, marginBottom: 8 }}>
           {hours.map((h) => (
-            <div key={h} className="dv-hour" style={{ top: (h - minH) * HOUR_PX + 10 }}>
+            <div key={h} className="dv-hour" style={{ top: (h - minH) * HPX + 10 }}>
               <span>{String(h).padStart(2, "0")}:00</span>
             </div>
           ))}
