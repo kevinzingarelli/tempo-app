@@ -27,6 +27,9 @@ function UserForm({ user, me, onClose, onSaved }) {
   const [active, setActive] = useState(user.active !== false);
   const [contract, setContract] = useState(user.contracted_hours_weekly != null ? String(user.contracted_hours_weekly) : "");
   const [leave, setLeave] = useState(user.annual_leave_days != null ? String(user.annual_leave_days) : "");
+  const [leaveHours, setLeaveHours] = useState(user.annual_leave_hours != null ? String(user.annual_leave_hours) : "");
+  const [permitHours, setPermitHours] = useState(user.annual_permit_hours != null ? String(user.annual_permit_hours) : "");
+  const [hoursPerDay, setHoursPerDay] = useState(user.work_hours_per_day != null ? String(user.work_hours_per_day) : "");
   const [busy, setBusy] = useState(false);
   const isMe = user.id === me;
 
@@ -97,6 +100,9 @@ function UserForm({ user, me, onClose, onSaved }) {
       active,
       contracted_hours_weekly: contract ? Number(contract.replace(",", ".")) : null,
       annual_leave_days: leave ? Number(leave.replace(",", ".")) : null,
+      annual_leave_hours: leaveHours ? Number(leaveHours.replace(",", ".")) : null,
+      annual_permit_hours: permitHours ? Number(permitHours.replace(",", ".")) : null,
+      work_hours_per_day: hoursPerDay ? Number(hoursPerDay.replace(",", ".")) : null,
     }).eq("id", user.id);
     if (error) { setBusy(false); toast("Errore: " + error.message, "error"); return; }
 
@@ -163,9 +169,29 @@ function UserForm({ user, me, onClose, onSaved }) {
       </div>
 
       <div className="sheet-row">
-        <label className="field-label">Monte ferie annuo (giorni)</label>
-        <input className="field" inputMode="decimal" placeholder="Es. 26" value={leave} onChange={(e) => setLeave(e.target.value)} />
-        <p className="muted" style={{ fontSize: 12, marginTop: 5 }}>Giorni di ferie all'anno per questa persona. L'app sottrae quelli approvati e mostra i residui.</p>
+        <label className="field-label">Ferie e permessi (per il calcolo maturato)</label>
+        <div className="grid-2">
+          <div>
+            <label className="field-label" style={{ fontSize: 12 }}>Ore ferie / anno</label>
+            <input className="field" inputMode="decimal" placeholder="Es. 208" value={leaveHours} onChange={(e) => setLeaveHours(e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label" style={{ fontSize: 12 }}>Ore permessi / anno</label>
+            <input className="field" inputMode="decimal" placeholder="Es. 32" value={permitHours} onChange={(e) => setPermitHours(e.target.value)} />
+          </div>
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <label className="field-label" style={{ fontSize: 12 }}>Ore lavorative al giorno</label>
+          <input className="field" inputMode="decimal" placeholder="Es. 8" value={hoursPerDay} onChange={(e) => setHoursPerDay(e.target.value)} />
+        </div>
+        <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+          Servono per calcolare quante ferie e permessi ha maturato e usato ogni persona. Le ore al giorno convertono i giorni in ore (es. 5 giorni di ferie = 40h con 8h/giorno).
+        </p>
+        <div style={{ marginTop: 10 }}>
+          <label className="field-label" style={{ fontSize: 12 }}>Monte ferie in giorni (facoltativo, alternativa)</label>
+          <input className="field" inputMode="decimal" placeholder="Es. 26" value={leave} onChange={(e) => setLeave(e.target.value)} />
+          <p className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>Se non usi le ore sopra, puoi indicare solo i giorni: l'app li converte con le ore al giorno.</p>
+        </div>
       </div>
 
       <div className="sheet-row">
@@ -251,7 +277,7 @@ export default function UserManager() {
     const [profRes, offRes] = await Promise.all([
       supabase
         .from("profiles")
-        .select("id, name, role, active, cost_rate, contracted_hours_weekly, annual_leave_days")
+        .select("id, name, role, active, cost_rate, contracted_hours_weekly, annual_leave_days, annual_leave_hours, annual_permit_hours, work_hours_per_day")
         .order("name"),
       supabase
         .from("time_off")

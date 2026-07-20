@@ -26,6 +26,11 @@ alter table public.profiles add column if not exists cost_rate numeric;
 alter table public.profiles add column if not exists contracted_hours_weekly numeric;
 alter table public.profiles add column if not exists weekly_goal_hours numeric; -- obiettivo personale, modificabile dall'utente stesso
 alter table public.profiles add column if not exists annual_leave_days numeric; -- monte ferie annuo (giorni), impostato dall'admin
+-- Monte ANNUO di ferie e permessi in ORE (per il calcolo maturato/residuo
+-- preciso, aggiunto in v19). Se presenti, hanno precedenza su annual_leave_days.
+alter table public.profiles add column if not exists annual_leave_hours numeric;   -- ore ferie/anno
+alter table public.profiles add column if not exists annual_permit_hours numeric;  -- ore permessi (ROL)/anno
+alter table public.profiles add column if not exists work_hours_per_day numeric;    -- ore lavorative al giorno (per convertire g<->h)
 
 create table if not exists public.projects (
   id               uuid primary key default gen_random_uuid(),
@@ -131,6 +136,10 @@ begin
        or new.active is distinct from old.active
        or new.cost_rate is distinct from old.cost_rate
        or new.contracted_hours_weekly is distinct from old.contracted_hours_weekly
+       or new.annual_leave_days is distinct from old.annual_leave_days
+       or new.annual_leave_hours is distinct from old.annual_leave_hours
+       or new.annual_permit_hours is distinct from old.annual_permit_hours
+       or new.work_hours_per_day is distinct from old.work_hours_per_day
        or new.hourly_rate is distinct from old.hourly_rate then
       raise exception 'Non autorizzato a modificare questi campi del profilo';
     end if;

@@ -5,6 +5,7 @@ import { useData } from "../state/DataContext.jsx";
 import { IconCalendar, IconCheck, IconPlus } from "../lib/icons.jsx";
 import Sheet from "./Sheet.jsx";
 import ProjectPicker from "./ProjectPicker.jsx";
+import { HOUR_PX } from "./DayView.jsx";
 
 function toISODate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -17,7 +18,7 @@ function evTimeLabel(ev) {
   return e ? `${f(s)}–${f(e)}` : f(s);
 }
 
-export default function DayGoogle({ day }) {
+export default function DayGoogle({ day, extMinH, extMaxH, onRange }) {
   const { user } = useAuth();
   const { addEntry, projectById, clientById, toast, entries } = useData();
   const [state, setState] = useState({ loading: true, connected: false, events: [], error: null });
@@ -52,6 +53,31 @@ export default function DayGoogle({ day }) {
 
   useEffect(() => { loadEvents(); }, [loadEvents]);
   useEffect(() => { loadLinks(); }, [loadLinks]);
+
+  // Range orario grezzo coperto dagli eventi (con orario) di oggi.
+  let rawMinH = null, rawMaxH = null;
+  for (const ev of state.events || []) {
+    if (ev.allDay) continue;
+    const s = new Date(ev.start);
+    const e = ev.end ? new Date(ev.end) : new Date(s.getTime() + 3600000);
+    const sh = s.getHours();
+    const eh = e.getMinutes() > 0 ? e.getHours() + 1 : e.getHours();
+    rawMinH = rawMinH === null ? sh : Math.min(rawMinH, sh);
+    rawMaxH = rawMaxH === null ? eh : Math.max(rawMaxH, eh);
+  }
+  if (rawMaxH != null) rawMaxH = Math.min(24, rawMaxH);
+
+  // Lo comunico al genitore, che calcola l'unione coi range dell'altra colonna.
+  useEffect(() => {
+    if (onRange) onRange(rawMinH, rawMaxH);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawMinH, rawMaxH]);
+
+  // Range EFFETTIVO usato per disegnare questa colonna: il mio più quello
+  // ricevuto dall'altra colonna (stessa logica simmetrica di DayView).
+  let minH = rawMinH ?? 8, maxH = rawMaxH ?? 19;
+  if (typeof extMinH === "number") minH = Math.min(minH, extMinH);
+  if (typeof extMaxH === "number") maxH = Math.max(maxH, extMaxH);
 
   function connect() {
     window.location.href = `/api/google-auth?uid=${user.id}`;
@@ -154,36 +180,15 @@ export default function DayGoogle({ day }) {
             {state.error} <button className="link-btn" onClick={connect}>Ricollega</button>
           </div>
         </div>
-      ) : state.events.length === 0 ? (
-        <div className="empty" style={{ padding: 24 }}>
-          <div className="empty-emoji">📅</div>
-          Nessun impegno in questo giorno.
-        </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {state.events.map((ev) => {
-            const link = links[ev.id];
-            const done = !!link;
-            return (
-              <div key={ev.id} className={"gcal-card" + (done ? " done" : "")}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="gcal-title">
-                    {ev.title}
-                    {done && <span className="gcal-done-badge"><IconCheck style={{ width: 12, height: 12 }} /> già registrato</span>}
-                  </div>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {evTimeLabel(ev)}{ev.location ? ` · ${ev.location}` : ""}
-                  </div>
-                </div>
-                {!done && (
-                  <button className="btn btn-soft btn-sm gcal-add" onClick={() => openConfirm(ev)}>
-                    <IconPlus style={{ width: 15, height: 15 }} /> Registra
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <GoogleTimeline
+          events={state.events}
+          links={links}
+          day={day}
+          minH={minH}
+          maxH={maxH}
+          onRegister={openConfirm}
+        />
       )}
 
       <Sheet open={!!confirmEv} onClose={() => setConfirmEv(null)} title="Registra come voce">
@@ -231,6 +236,95 @@ export default function DayGoogle({ day }) {
         value={pickProject}
         onChange={(id) => setPickProject(id)}
       />
+    </div>
+  );
+}
+
+// Timeline oraria con i blocchi degli eventi Google, sulla stessa scala
+// (stessi minH/maxH in ore, stesso HOUR_PX) della colonna "La tua giornata",
+// così le due colonne restano allineate riga per riga.
+function GoogleTimeline({ events, links, day, minH, maxH, onRegister }) {
+  const totalPx = (maxH - minH) * HOUR_PX;
+  const dayStart = new Date(day);
+  dayStart.setHours(minH, 0, 0, 0);
+
+  function yOf(date) {
+    return ((date - dayStart) / 3600000) * HOUR_PX;
+  }
+
+  const timedEvents = events.filter((e) => !e.allDay);
+  const allDayEvents = events.filter((e) => e.allDay);
+
+  const hours = [];
+  for (let h = minH; h <= maxH; h++) hours.push(h);
+
+  return (
+    <div>
+      {allDayEvents.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+          {allDayEvents.map((ev) => {
+            const done = !!links[ev.id];
+            return (
+              <div key={ev.id} className={"gcal-card" + (done ? " done" : "")}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="gcal-title">
+                    {ev.title}
+                    {done && <span className="gcal-done-badge"><IconCheck style={{ width: 12, height: 12 }} /> già registrato</span>}
+                  </div>
+                  <div className="muted" style={{ fontSize: 12 }}>Tutto il giorno</div>
+                </div>
+                {!done && (
+                  <button className="btn btn-soft btn-sm gcal-add" onClick={() => onRegister(ev)}>
+                    <IconPlus style={{ width: 15, height: 15 }} /> Registra
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {timedEvents.length === 0 && allDayEvents.length === 0 ? (
+        <div className="empty" style={{ padding: 24 }}>
+          <div className="empty-emoji">📅</div>
+          Nessun impegno in questo giorno.
+        </div>
+      ) : (
+        <div className="dayview" style={{ height: totalPx + 20, marginBottom: 8 }}>
+          {hours.map((h) => (
+            <div key={h} className="dv-hour" style={{ top: (h - minH) * HOUR_PX + 10 }}>
+              <span>{String(h).padStart(2, "0")}:00</span>
+            </div>
+          ))}
+
+          {timedEvents.map((ev) => {
+            const s = new Date(ev.start);
+            const e = ev.end ? new Date(ev.end) : new Date(s.getTime() + 3600000);
+            const done = !!links[ev.id];
+            const top = Math.max(0, yOf(s)) + 10;
+            const height = Math.max(26, yOf(e) - yOf(s));
+            return (
+              <button
+                key={ev.id}
+                className={"dv-block gcal-block" + (done ? " done" : "")}
+                style={{ top, height }}
+                onClick={() => !done && onRegister(ev)}
+              >
+                <div className="b-title">
+                  {ev.title}
+                  {done && <span className="gcal-done-badge" style={{ marginLeft: 6 }}><IconCheck style={{ width: 11, height: 11 }} /></span>}
+                </div>
+                {height >= 40 && (
+                  <div className="b-sub">
+                    {evTimeLabel(ev)}{ev.location ? ` · ${ev.location}` : ""}
+                    {!done && " · tocca per registrare"}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

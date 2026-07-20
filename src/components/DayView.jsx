@@ -3,9 +3,9 @@ import { useData } from "../state/DataContext.jsx";
 import EntryEditor from "./EntryEditor.jsx";
 import { entrySeconds, fmtDuration, fmtTime, sameDay } from "../lib/format.js";
 
-const HOUR_PX = 56;
+export const HOUR_PX = 56;
 
-export default function DayView({ day: dayProp, onShiftDay, hideNav }) {
+export default function DayView({ day: dayProp, onShiftDay, hideNav, extMinH, extMaxH, onRange }) {
   const { entries, runningEntry, projectById, clientById } = useData();
   const [dayInternal, setDayInternal] = useState(() => new Date());
   const day = dayProp || dayInternal;
@@ -48,8 +48,19 @@ export default function DayView({ day: dayProp, onShiftDay, hideNav }) {
   if (isToday) maxH = Math.max(maxH, now.getHours() + 1);
   minH = Math.max(0, minH);
   maxH = Math.min(24, maxH + 1);
+  const rawMinH = minH, rawMaxH = maxH;
+
+  // Se ricevo un range esterno (per allineare la timeline a quella di Google),
+  // lo uso per far combaciare esattamente le due colonne.
+  if (typeof extMinH === "number") minH = Math.min(minH, extMinH);
+  if (typeof extMaxH === "number") maxH = Math.max(maxH, extMaxH);
 
   const totalPx = (maxH - minH) * HOUR_PX;
+
+  useEffect(() => {
+    if (onRange) onRange(rawMinH, rawMaxH);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rawMinH, rawMaxH]);
   const dayStart = new Date(day);
   dayStart.setHours(minH, 0, 0, 0);
 

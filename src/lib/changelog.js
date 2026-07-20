@@ -2,10 +2,25 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "18";
+export const CURRENT_VERSION = "19";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "19",
+    date: "2026-07-20",
+    time: "06:35",
+    title: "Calendario Google in timeline, mini-timer e ferie precise",
+    items: [
+      "Gli impegni di Google Calendar ora sono una vera timeline oraria, allineata perfettamente a 'La tua giornata'",
+      "Il secondo timer in parallelo è ora una mini-card col cronometro, come il timer principale ma più piccola",
+    ],
+    adminItems: [
+      "Nuova sezione 'Situazione ferie e permessi': maturato, usato e residuo per ogni persona, in formato tipo '20g 2h'",
+      "Nei profili puoi impostare ore ferie e permessi all'anno, per un calcolo più preciso del maturato",
+      "Tu e Asia non vedete più il modulo di richiesta ferie (non vi serve)",
+    ],
+  },
   {
     version: "18",
     date: "2026-07-19",

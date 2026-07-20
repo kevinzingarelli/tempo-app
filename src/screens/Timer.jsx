@@ -69,6 +69,8 @@ export default function Timer() {
   const [parallelDesc, setParallelDesc] = useState("");
   const [parallelProject, setParallelProject] = useState(null);
   const [parallelPickerOpen, setParallelPickerOpen] = useState(false);
+  const [dayRange, setDayRange] = useState({ min: null, max: null });
+  const [googleRange, setGoogleRange] = useState({ min: null, max: null });
   const lastRunId = useRef(null);
 
   function toggleTree() {
@@ -573,14 +575,27 @@ export default function Timer() {
         </div>
       </div>
 
-      {/* Due calendari affiancati */}
+      {/* Due calendari affiancati, sulla stessa scala oraria (unione dei
+          range di lavoro e impegni Google, così le righe combaciano) */}
       <div className="cal-duo">
         <div className="cal-duo-col">
           <div className="section-label" style={{ marginTop: 2 }}>La tua giornata</div>
-          <DayView day={calDay} onShiftDay={(delta) => setCalDay((d) => { const n = new Date(d); n.setDate(n.getDate() + delta); return n; })} hideNav />
+          <DayView
+            day={calDay}
+            onShiftDay={(delta) => setCalDay((d) => { const n = new Date(d); n.setDate(n.getDate() + delta); return n; })}
+            hideNav
+            extMinH={googleRange.min}
+            extMaxH={googleRange.max}
+            onRange={(min, max) => setDayRange((r) => (r.min === min && r.max === max ? r : { min, max }))}
+          />
         </div>
         <div className="cal-duo-col">
-          <DayGoogle day={calDay} />
+          <DayGoogle
+            day={calDay}
+            extMinH={dayRange.min ?? 8}
+            extMaxH={dayRange.max ?? 19}
+            onRange={(min, max) => setGoogleRange((r) => (r.min === min && r.max === max ? r : { min, max }))}
+          />
         </div>
       </div>
 
@@ -834,25 +849,24 @@ function ParallelTimerRow({ entry, project, onStop, onPause, onResume, onEdit })
   const secs = entrySeconds(entry);
 
   return (
-    <div className="card" style={{ padding: "11px 13px", display: "flex", alignItems: "center", gap: 10 }}>
-      <button style={{ flex: 1, minWidth: 0, textAlign: "left" }} onClick={onEdit}>
-        <div style={{ fontWeight: 600, fontSize: 13.5, display: "flex", alignItems: "center", gap: 8 }}>
+    <div className={"mini-timer" + (paused ? " paused" : "")}>
+      <button className="mini-timer-main" onClick={onEdit}>
+        <div className="mini-timer-title">
           {project && <span className="entry-dot" style={{ background: project.color || "#999" }} />}
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {entry.description || project?.name || "Senza descrizione"}
           </span>
         </div>
-        <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
-          {fmtDuration(secs)}{paused ? " · in pausa" : ""}
-        </div>
+        <div className="mini-timer-clock">{fmtClock(secs)}</div>
+        {paused && <div className="mini-timer-paused">in pausa</div>}
       </button>
-      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+      <div className="mini-timer-controls">
         {paused ? (
-          <button className="btn btn-soft btn-sm" onClick={onResume} aria-label="Riprendi"><IconPlay style={{ width: 14, height: 14 }} /></button>
+          <button className="mini-timer-btn" onClick={onResume} aria-label="Riprendi"><IconPlay style={{ width: 15, height: 15 }} /></button>
         ) : (
-          <button className="btn btn-soft btn-sm" onClick={onPause} aria-label="Pausa">❚❚</button>
+          <button className="mini-timer-btn" onClick={onPause} aria-label="Pausa">❚❚</button>
         )}
-        <button className="btn btn-soft btn-sm" onClick={onStop} aria-label="Ferma"><IconStop style={{ width: 14, height: 14 }} /></button>
+        <button className="mini-timer-btn stop" onClick={onStop} aria-label="Ferma"><IconStop style={{ width: 15, height: 15 }} /></button>
       </div>
     </div>
   );

@@ -1408,3 +1408,36 @@ img { -webkit-user-drag: none; user-select: none; }
   background: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(224,66,75,0.10) 4px, rgba(224,66,75,0.10) 8px);
   border-radius: inherit; pointer-events: none;
 }
+
+/* ===== Mini-timer parallelo (a forma di timer, più piccolo) ===== */
+.mini-timer {
+  display: flex; align-items: center; gap: 10px;
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  background: var(--hot-grad);
+  box-shadow: var(--shadow-hot);
+  color: #fff;
+}
+.mini-timer.paused { filter: saturate(0.8) brightness(0.96); }
+.mini-timer-main { flex: 1; min-width: 0; text-align: left; color: #fff; }
+.mini-timer-title {
+  font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 7px;
+  color: rgba(255,255,255,0.92); margin-bottom: 2px;
+}
+.mini-timer-clock {
+  font-family: var(--font-display);
+  font-size: 26px; font-weight: 700; line-height: 1.05; letter-spacing: -0.5px;
+}
+.mini-timer-paused { font-size: 11px; color: rgba(255,255,255,0.8); margin-top: 1px; }
+.mini-timer-controls { display: flex; gap: 6px; flex-shrink: 0; }
+.mini-timer-btn {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: rgba(255,255,255,0.22); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700;
+}
+.mini-timer-btn.stop { background: #fff; color: var(--stop); }
+
+/* Blocco Google nella timeline oraria (v19: allineata a "La tua giornata") */
+.gcal-block { opacity: 0.94; }
+.gcal-block.done { opacity: 0.55; filter: grayscale(0.3); cursor: default; }

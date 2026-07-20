@@ -3,6 +3,24 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../state/AuthContext.jsx";
 import { useData } from "../state/DataContext.jsx";
 import { IconPlus, IconCalendar, IconCheck } from "../lib/icons.jsx";
+import { leaveBalance, fmtDaysHours } from "../lib/leave.js";
+
+function LeaveStat({ label, bal, hpd }) {
+  return (
+    <div style={{ minWidth: 140 }}>
+      <div className="muted" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: bal.remainingHours >= 0 ? "var(--ok)" : "var(--stop)" }}>
+        {fmtDaysHours(bal.remainingHours, hpd)} residui
+      </div>
+      <div className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>
+        maturati {fmtDaysHours(bal.accruedHours, hpd)} · usati {fmtDaysHours(bal.usedHours, hpd)}
+      </div>
+      <div className="muted" style={{ fontSize: 11, marginTop: 1 }}>
+        totale anno {fmtDaysHours(bal.yearHours, hpd)}
+      </div>
+    </div>
+  );
+}
 
 function isoToday() {
   const d = new Date();
@@ -76,6 +94,7 @@ export default function TimeOff() {
   const [allReq, setAllReq] = useState([]);
   const [people, setPeople] = useState({});
   const [peopleLeave, setPeopleLeave] = useState({});
+  const [profiles, setProfiles] = useState([]);
   const [closures, setClosures] = useState([]);
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(() => { const d = new Date(); d.setDate(1); return d; });
@@ -104,17 +123,20 @@ export default function TimeOff() {
       if (isAdmin) {
         const [allRes, profRes] = await Promise.all([
           supabase.from("time_off").select("*").order("created_at", { ascending: false }),
-          supabase.from("profiles").select("id, name, annual_leave_days"),
+          supabase.from("profiles").select("id, name, active, annual_leave_days, annual_leave_hours, annual_permit_hours, work_hours_per_day"),
         ]);
         setAllReq(allRes.data || []);
         const m = {};
         const leaveMap = {};
+        const profList = [];
         (profRes.data || []).forEach((p) => {
           m[p.id] = p.name || "Senza nome";
           leaveMap[p.id] = p.annual_leave_days ?? null;
+          if (p.active !== false) profList.push(p);
         });
         setPeople(m);
         setPeopleLeave(leaveMap);
+        setProfiles(profList);
       }
     } catch (e) {
       toast(friendlyError(e), "error");
@@ -255,6 +277,19 @@ export default function TimeOff() {
     return alerts.sort((a, b) => b.left - a.left);
   })();
 
+  // Riepilogo saldi ferie/permessi per persona (admin).
+  const leaveSummary = (() => {
+    if (!isAdmin) return [];
+    return profiles
+      .map((p) => {
+        const reqs = allReq.filter((r) => r.user_id === p.id);
+        const bal = leaveBalance(p, reqs);
+        return bal ? { id: p.id, name: p.name || "Senza nome", bal } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  })();
+
   const closureDays = new Set(closures.map((c) => c.day));
   const proposedHolidays = [...nationalHolidays(month.getFullYear()), ...nationalHolidays(month.getFullYear() + 1)]
     .filter((h) => !closureDays.has(h.day) && h.day >= isoToday())
@@ -370,7 +405,7 @@ export default function TimeOff() {
         {isAdmin && <span><span className="cal-mark mark-team">N</span> Persone in ferie</span>}
       </div>
 
-      {myLeaveTotal != null && (
+      {!isAdmin && myLeaveTotal != null && (
         <div className="card leave-balance">
           <div>
             <div className="leave-num">{myLeaveLeft}<span className="leave-den">/{myLeaveTotal} gg</span></div>
@@ -399,6 +434,30 @@ export default function TimeOff() {
           ))}
           <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>
             ⚠️ Stima gestionale interna. Il saldo ufficiale è quello del consulente del lavoro.
+          </p>
+        </div>
+      )}
+
+      {isAdmin && leaveSummary.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div className="section-label" style={{ marginTop: 0 }}>Situazione ferie e permessi</div>
+          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+            {leaveSummary.map((s, idx) => (
+              <div key={s.id} style={{ padding: "12px 14px", borderTop: idx > 0 ? "1px solid var(--line)" : "none" }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>{s.name}</div>
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                  {s.bal.ferie && (
+                    <LeaveStat label="Ferie" bal={s.bal.ferie} hpd={s.bal.hoursPerDay} />
+                  )}
+                  {s.bal.permessi && (
+                    <LeaveStat label="Permessi" bal={s.bal.permessi} hpd={s.bal.hoursPerDay} />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>
+            Maturato = quota dell'anno trascorsa finora. Residuo = maturato meno usato. ⚠️ Stima gestionale interna, il dato ufficiale è del consulente del lavoro.
           </p>
         </div>
       )}
@@ -454,7 +513,9 @@ export default function TimeOff() {
         </>
       )}
 
-      <div className="section-label" style={{ marginTop: isAdmin ? 26 : 0 }}>Nuova richiesta</div>
+      {!isAdmin && (
+      <>
+      <div className="section-label" style={{ marginTop: 0 }}>Nuova richiesta</div>
       <div className="card" style={{ padding: 16 }}>
         <label className="field-label">Tipo di assenza</label>
         <div className="segment" style={{ marginBottom: 12 }}>
@@ -488,8 +549,10 @@ export default function TimeOff() {
           {sending ? <span className="spinner spinner-white" /> : <><IconPlus style={{ width: 17, height: 17 }} /> Invia richiesta</>}
         </button>
       </div>
+      </>
+      )}
 
-      {mine.length > 0 && (
+      {!isAdmin && mine.length > 0 && (
         <>
           <div className="section-label">Le mie richieste</div>
           <div className="card">
