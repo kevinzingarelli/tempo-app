@@ -2,10 +2,23 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "22";
+export const CURRENT_VERSION = "23";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "23",
+    date: "2026-07-21",
+    time: "08:05",
+    title: "Calendario Google, giorno corrente e ferie colorate",
+    items: [
+      "Risolto: gli impegni di Google Calendar erano diventati invisibili (bug della versione precedente)",
+      "Il calendario torna da solo sul giorno corrente quando riapri l'app e nel frattempo è passata la mezzanotte",
+      "Le caselle del calendario ferie ora hanno lo sfondo colorato: giallo se in attesa, verde acqua se approvata",
+      "Aggiunta una decorazione stagionale sullo sfondo delle caselle: Babbo Natale/albero a dicembre, palme d'estate, fiori a primavera, foglie in autunno, una vela nei weekend liberi",
+    ],
+    adminItems: [],
+  },
   {
     version: "22",
     date: "2026-07-20",

@@ -69,14 +69,22 @@ function nationalHolidays(year) {
 }
 
 // Icona stagionale per un giorno di ferie approvate, in base al periodo.
+// Icona stagionale/decorativa per lo sfondo di una casella del calendario.
+// "kind" distingue il motivo della decorazione: assenza approvata (usa
+// l'icona del periodo), weekend (vela), o niente.
 function seasonalIcon(dateObj) {
   const m = dateObj.getMonth() + 1;
   const day = dateObj.getDate();
+  if (m === 12 && day >= 20) return "🎅"; // Babbo Natale, sotto Natale
   if ((m === 12 && day >= 8) || (m === 1 && day <= 6)) return "🎄"; // Natale
-  if (m >= 6 && m <= 9) return "🏖️"; // estate
+  if (m >= 6 && m <= 9) return "🌴"; // estate
   if (m >= 3 && m <= 5) return "🌸"; // primavera
   if (m === 10 || m === 11) return "🍂"; // autunno
   return "⛄"; // inverno
+}
+// Decorazione leggera per i weekend (giorni chiusi non festivi).
+function weekendIcon() {
+  return "⛵";
 }
 
 const STATUS = {
@@ -413,25 +421,43 @@ export default function TimeOff() {
             if (!d) return <div key={i} className="cal-cell empty" />;
             const clo = closureFor(d);
             const my = myStatusFor(d);
-            const teamCount = teamApprovedCount(d);
             const today = toISO(d) === isoToday();
             const isCompanyClosure = clo && clo.label && clo.label !== "Weekend";
+            const isWeekend = clo && clo.label === "Weekend";
+            const teamAbs = isAdmin ? teamAbsencesFor(d) : [];
+
+            // Stato che decide lo sfondo colorato della casella:
+            // pending (giallo) prevale su approved (verde-pettirosso).
+            const relevantAbs = isAdmin ? teamAbs : (my ? [{ status: my.status, kind: my.kind || "ferie" }] : []);
+            const hasPending = relevantAbs.some((a) => a.status === "pending");
+            const hasApproved = relevantAbs.some((a) => a.status === "approved");
+            const absenceState = hasPending ? "pending" : hasApproved ? "approved" : null;
+
             let cls = "cal-cell";
             cls += clo ? " closed" : " open";
             if (today) cls += " today";
             if (isCompanyClosure) cls += " company-closure";
+            if (absenceState === "pending") cls += " absence-pending";
+            if (absenceState === "approved") cls += " absence-approved";
+
             const titleTxt = clo?.label || (my ? STATUS[my.status]?.label : "Aperto");
-            const showSeasonal = my?.status === "approved" && (my.kind === "ferie" || !my.kind);
-            const teamAbs = isAdmin ? teamAbsencesFor(d) : [];
+
+            // Emoji decorativa di sfondo: stagionale se c'è un'assenza
+            // approvata di tipo ferie, altrimenti vela nel weekend libero.
+            const showFerieDecor = absenceState && relevantAbs.some((a) => (a.kind || "ferie") === "ferie");
+            const bgEmoji = showFerieDecor ? seasonalIcon(d) : (!clo || isWeekend) && !absenceState ? (isWeekend ? weekendIcon() : null) : null;
+
             return (
               <div key={i} className={cls} title={titleTxt}>
+                {bgEmoji && <span className="cal-bg-emoji" aria-hidden>{bgEmoji}</span>}
                 <span className="cal-daynum">{d.getDate()}</span>
-                <span className="cal-marks">
-                  {!isAdmin && my?.status === "pending" && <span className="cal-mark mark-pending" />}
-                  {!isAdmin && showSeasonal && <span className="cal-season" aria-hidden>{seasonalIcon(d)}</span>}
-                  {!isAdmin && my?.status === "approved" && my.kind === "permesso" && <span className="cal-season" aria-hidden>🕐</span>}
-                  {!isAdmin && my?.status === "approved" && my.kind === "malattia" && <span className="cal-season" aria-hidden>🤒</span>}
-                </span>
+
+                {!isAdmin && my && (
+                  <span className="cal-my-mark">
+                    {my.status === "pending" ? "🕐" : my.kind === "permesso" ? "🕐" : my.kind === "malattia" ? "🤒" : "🏖️"}
+                  </span>
+                )}
+
                 {isAdmin && teamAbs.length > 0 && (
                   <span className="cal-people">
                     {teamAbs.slice(0, 4).map((a) => (
@@ -440,7 +466,6 @@ export default function TimeOff() {
                         className={"cal-person " + (a.status === "pending" ? "is-pending" : "is-approved")}
                         title={`${a.name} · ${a.status === "pending" ? "in attesa" : "approvata"}${a.kind !== "ferie" ? " · " + a.kind : ""}`}
                       >
-                        {a.status === "pending" ? "🕐" : (a.kind === "permesso" ? "🕐" : a.kind === "malattia" ? "🤒" : "🏖️")}
                         <span className="cal-person-i">{a.initial}</span>
                       </span>
                     ))}
@@ -457,16 +482,10 @@ export default function TimeOff() {
         <span><span className="lg-dot lg-red" /> Chiuso (weekend / festa)</span>
         <span><span className="lg-dot lg-company" /> Chiusura aziendale</span>
         <span><span className="lg-dot lg-green" /> Aperto</span>
-        {!isAdmin && <span><span className="cal-mark mark-pending" /> In attesa</span>}
-        {isAdmin ? (
-          <>
-            <span><span className="cal-person is-approved" style={{ position: "static" }}>🏖️<span className="cal-person-i">D</span></span> Approvata (iniziale)</span>
-            <span><span className="cal-person is-pending" style={{ position: "static" }}>🕐<span className="cal-person-i">D</span></span> In attesa</span>
-            <span>🏖️ Ferie · 🕐 Permesso · 🤒 Malattia</span>
-          </>
-        ) : (
-          <span>🏖️🌸🍂 Ferie · 🕐 Permesso · 🤒 Malattia</span>
-        )}
+        <span><span style={{ display: "inline-block", width: 14, height: 14, borderRadius: 4, background: "#fdecb0", boxShadow: "inset 0 0 0 1px #e8c85a", verticalAlign: "middle" }} /> In attesa</span>
+        <span><span style={{ display: "inline-block", width: 14, height: 14, borderRadius: 4, background: "#bfe9de", boxShadow: "inset 0 0 0 1px #7bcdb9", verticalAlign: "middle" }} /> Approvata</span>
+        {isAdmin && <span><span className="cal-person is-approved">D</span> iniziale della persona</span>}
+        <span>🎅🎄🌴🌸🍂 decorazione stagionale · ⛵ weekend</span>
       </div>
 
       {!isAdmin && myLeaveTotal != null && (

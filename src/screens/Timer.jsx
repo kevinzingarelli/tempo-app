@@ -65,6 +65,32 @@ export default function Timer() {
   const [newsBadge, setNewsBadge] = useState(() => hasUnseenNews(isAdmin));
   const [showTree, setShowTree] = useState(() => localStorage.getItem("boschetto_show_tree") !== "0");
   const [calDay, setCalDay] = useState(() => new Date());
+  const lastKnownToday = useRef(new Date().toDateString());
+
+  // Le PWA su iPhone restano "congelate" quando le riapri: se lasci l'app
+  // aperta durante la notte, il calendario resterebbe sul giorno vecchio.
+  // Quando l'app torna in primo piano controllo se è scattata la mezzanotte:
+  // se sì E stavi guardando "oggi" (non un altro giorno a cui eri andato di
+  // proposito), sposto la vista sul nuovo oggi. Se avevi navigato altrove
+  // intenzionalmente, non tocco nulla.
+  useEffect(() => {
+    function checkDayRollover() {
+      if (document.visibilityState !== "visible") return;
+      const realToday = new Date().toDateString();
+      if (realToday === lastKnownToday.current) return; // nessun cambio di giorno
+      setCalDay((d) => {
+        const wasOnOldToday = d.toDateString() === lastKnownToday.current;
+        lastKnownToday.current = realToday;
+        return wasOnOldToday ? new Date() : d;
+      });
+    }
+    document.addEventListener("visibilitychange", checkDayRollover);
+    window.addEventListener("focus", checkDayRollover);
+    return () => {
+      document.removeEventListener("visibilitychange", checkDayRollover);
+      window.removeEventListener("focus", checkDayRollover);
+    };
+  }, []);
   const [parallelOpen, setParallelOpen] = useState(false);
   const [parallelDesc, setParallelDesc] = useState("");
   const [parallelProject, setParallelProject] = useState(null);
