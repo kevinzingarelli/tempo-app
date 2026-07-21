@@ -2,10 +2,36 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "23";
+export const CURRENT_VERSION = "25";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "25",
+    date: "2026-07-21",
+    time: "18:31",
+    title: "Cronologia più ordinata e report per attività",
+    items: [
+      "La cronologia nella home ora è a menù: oggi resta sempre aperto, ieri e gli altri giorni della settimana si aprono con un tocco",
+      "Le settimane precedenti sono raggruppate: tocchi 'Settimana scorsa' e vedi tutti i giorni con dentro il dettaglio",
+      "Nel Report puoi vedere il tempo raggruppato Per progetto o Per attività: quest'ultima somma tutti i task con la stessa descrizione (es. tutti i 'Check' insieme), utile per capire quanto hai lavorato su un argomento ricorrente",
+    ],
+    adminItems: [],
+  },
+  {
+    version: "24",
+    date: "2026-07-21",
+    time: "18:24",
+    title: "Timer pulito e report più chiari",
+    items: [
+      "Risolto: dopo aver fermato il timer, i campi tornano vuoti e il prossimo avvio non ripropone l'ultimo progetto",
+      "Nel Report, le barre per progetto sono ora proporzionali al tempo e ogni progetto ha il suo colore",
+      "Nel Report, accanto a ogni progetto trovi la percentuale sul totale",
+    ],
+    adminItems: [
+      "Nella Dashboard, la card Ore team ora mostra le ore fatte rispetto alle ore dovute da contratto",
+    ],
+  },
   {
     version: "23",
     date: "2026-07-21",

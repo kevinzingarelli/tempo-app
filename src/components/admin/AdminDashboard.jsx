@@ -258,8 +258,13 @@ export default function AdminDashboard() {
       {/* KPI principali */}
       <div className="stat-grid">
         <div className="stat">
-          <div className="stat-value">{fmtDuration(totalSecs)}</div>
-          <div className="stat-label">Ore team</div>
+          <div className="stat-value">
+            {fmtDuration(totalSecs)}
+            {contractedSecs != null && (
+              <span style={{ fontSize: 13, fontWeight: 500, color: "var(--ink-faint)" }}> / {fmtDuration(contractedSecs)}</span>
+            )}
+          </div>
+          <div className="stat-label">{contractedSecs != null ? "Ore team (fatte / dovute)" : "Ore team"}</div>
         </div>
         <div className="stat">
           <div className="stat-value">{eur(totalToInvoice)}</div>

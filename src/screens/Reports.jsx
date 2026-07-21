@@ -13,6 +13,7 @@ export default function Reports() {
   const { profile } = useAuth();
   const [period, setPeriod] = useState("week");
   const [view, setView] = useState("summary");
+  const [groupBy, setGroupBy] = useState("project"); // "project" | "activity"
 
   const from = period === "week" ? startOfWeek() : period === "month" ? startOfMonth() : new Date(0);
   const inRange = entries.filter((e) => e.stopped_at && new Date(e.started_at) >= from);
@@ -28,6 +29,7 @@ export default function Reports() {
   const contractPct = contractedSecs ? (totalSecs / contractedSecs) * 100 : null;
 
   // per progetto
+  const PALETTE = ["#2f7d4f", "#3b6ef5", "#e5a300", "#ff8a3d", "#e5484d", "#b14bd8", "#0ca6a6", "#d8567a", "#7a7a85"];
   const byProject = {};
   for (const e of inRange) {
     const k = e.project_id || "none";
@@ -36,10 +38,41 @@ export default function Reports() {
   const rows = Object.entries(byProject)
     .map(([id, secs]) => {
       const p = id === "none" ? null : projectById(id);
-      return { id, name: p?.name || "Senza progetto", color: p?.color || "#cfcfca", secs };
+      return { id, name: p?.name || "Senza progetto", color: p?.color || null, secs };
     })
-    .sort((a, b) => b.secs - a.secs);
+    .sort((a, b) => b.secs - a.secs)
+    .map((r, i) => ({ ...r, color: r.color || PALETTE[i % PALETTE.length] }));
   const max = Math.max(1, ...rows.map((r) => r.secs));
+  const sumSecs = rows.reduce((a, r) => a + r.secs, 0) || 1;
+
+  // Raggruppamento "per attività": utile per task ripetitivi (es. "Check")
+  // fatti su progetti/giorni diversi. Normalizzo la descrizione (minuscolo,
+  // senza accenti/spazi doppi) così "Check", "check ", "Check!" finiscono
+  // nello stesso gruppo.
+  function normDesc(s) {
+    return (s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  const byActivity = {};
+  for (const e of inRange) {
+    const norm = normDesc(e.description) || "(senza descrizione)";
+    if (!byActivity[norm]) {
+      byActivity[norm] = { key: norm, name: (e.description || "Senza descrizione").trim() || "Senza descrizione", secs: 0, count: 0 };
+    }
+    byActivity[norm].secs += entrySeconds(e);
+    byActivity[norm].count += 1;
+  }
+  const activityRows = Object.values(byActivity)
+    .sort((a, b) => b.secs - a.secs)
+    .map((r, i) => ({ ...r, color: PALETTE[i % PALETTE.length] }));
+  const activityMax = Math.max(1, ...activityRows.map((r) => r.secs));
+
+  const displayRows = groupBy === "project" ? rows : activityRows;
+  const displayMax = groupBy === "project" ? max : activityMax;
 
   return (
     <div className="screen">
@@ -84,18 +117,36 @@ export default function Reports() {
         <div className="stat"><div className="stat-value">{Math.round(billablePct)}%</div><div className="stat-label">% fatturabile</div></div>
       </div>
 
-      <div className="section-label">Per progetto</div>
-      {rows.length === 0 ? (
+      <div className="row-between" style={{ marginBottom: 8, alignItems: "baseline" }}>
+        <div className="section-label" style={{ marginBottom: 0 }}>
+          {groupBy === "project" ? "Per progetto" : "Per attività"}
+        </div>
+        <div className="segment" style={{ width: "auto" }}>
+          <button className={groupBy === "project" ? "active" : ""} onClick={() => setGroupBy("project")}>Progetto</button>
+          <button className={groupBy === "activity" ? "active" : ""} onClick={() => setGroupBy("activity")}>Attività</button>
+        </div>
+      </div>
+      {displayRows.length === 0 ? (
         <div className="empty"><div className="empty-emoji">📊</div>Nessuna ora nel periodo scelto.</div>
       ) : (
         <div className="card" style={{ padding: "10px 14px" }}>
-          {rows.map((r) => (
-            <div key={r.id} className="bar-row">
-              <span className="bar-name">{r.name}</span>
-              <span className="bar-track"><span className="bar-fill" style={{ width: `${(r.secs / max) * 100}%`, background: r.color }} /></span>
-              <span className="bar-val">{fmtDuration(r.secs)}</span>
-            </div>
-          ))}
+          {displayRows.map((r) => {
+            const pct = Math.round((r.secs / sumSecs) * 100);
+            return (
+              <div key={r.id || r.key} className="bar-row">
+                <span className="bar-name">
+                  {r.name}
+                  {groupBy === "activity" && r.count > 1 && (
+                    <span className="muted" style={{ fontWeight: 500 }}> ×{r.count}</span>
+                  )}
+                </span>
+                <span className="bar-track">
+                  <span className="bar-fill" style={{ width: `${Math.max(2, (r.secs / displayMax) * 100)}%`, background: r.color }} />
+                </span>
+                <span className="bar-val">{fmtDuration(r.secs)} · {pct}%</span>
+              </div>
+            );
+          })}
         </div>
       )}
 

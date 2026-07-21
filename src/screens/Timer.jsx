@@ -15,6 +15,7 @@ import {
   entrySeconds,
   dayLabel,
   dayKey,
+  startOfWeek,
 } from "../lib/format.js";
 import {
   IconPlay,
@@ -59,6 +60,8 @@ export default function Timer() {
   const [accountOpen, setAccountOpen] = useState(false);
   const [descFocus, setDescFocus] = useState(false);
   const [search, setSearch] = useState("");
+  const [expandedDays, setExpandedDays] = useState(() => new Set()); // giorni (non oggi) aperti manualmente
+  const [expandedWeeks, setExpandedWeeks] = useState(() => new Set()); // settimane passate aperte manualmente
   const [themePref, setThemePrefState] = useState(getThemePref());
   const [goalText, setGoalText] = useState("");
   const [newsOpen, setNewsOpen] = useState(false);
@@ -155,14 +158,21 @@ export default function Timer() {
     return () => clearInterval(t);
   }, [runningEntry]);
 
-  // sincronizza i campi quando parte/cambia il timer in corso
+  // sincronizza i campi quando parte/cambia il timer in corso.
+  // Quando il timer passa da attivo a fermo (id diventa null), azzero i campi
+  // così il prossimo avvio parte pulito e non ripropone l'ultimo progetto.
   useEffect(() => {
     const id = runningEntry?.id || null;
     if (id !== lastRunId.current) {
+      const wasRunning = lastRunId.current !== null;
       lastRunId.current = id;
       if (runningEntry) {
         setDraftDesc(runningEntry.description || "");
         setDraftProject(runningEntry.project_id || null);
+      } else if (wasRunning) {
+        // il timer è appena stato fermato: ripulisco i campi
+        setDraftDesc("");
+        setDraftProject(null);
       }
     }
   }, [runningEntry]);
@@ -301,6 +311,57 @@ export default function Timer() {
     }
     byDay[k].items.push(e);
     byDay[k].total += entrySeconds(e);
+  }
+
+  // Organizzo i gruppi-giorno in 3 livelli per la cronologia ad accordion:
+  // 1) oggi (sempre estesa)
+  // 2) altri giorni della SETTIMANA CORRENTE (lun-dom): ciascuno apribile singolarmente
+  // 3) settimane precedenti: raggruppate, un click apre la settimana e mostra tutti i suoi giorni
+  const curWeekStart = startOfWeek(new Date());
+  const todayGroup = groups.find((g) => g.key === todayKey) || null;
+  const thisWeekDayGroups = groups.filter((g) => {
+    if (g.key === todayKey) return false;
+    const gd = new Date(g.key + "T12:00:00");
+    return gd >= curWeekStart;
+  });
+  const pastGroups = groups.filter((g) => {
+    if (g.key === todayKey) return false;
+    const gd = new Date(g.key + "T12:00:00");
+    return gd < curWeekStart;
+  });
+  // raggruppo i giorni passati per settimana (lunedì di quella settimana)
+  const weekBuckets = [];
+  const byWeek = {};
+  for (const g of pastGroups) {
+    const gd = new Date(g.key + "T12:00:00");
+    const wStart = startOfWeek(gd);
+    const wKey = dayKey(wStart);
+    if (!byWeek[wKey]) {
+      const diffWeeks = Math.round((curWeekStart - wStart) / (7 * 86400000));
+      const label =
+        diffWeeks === 1
+          ? "Settimana scorsa"
+          : `Settimana del ${wStart.toLocaleDateString("it-IT", { day: "numeric", month: "short" })}`;
+      byWeek[wKey] = { key: wKey, label, days: [], total: 0 };
+      weekBuckets.push(byWeek[wKey]);
+    }
+    byWeek[wKey].days.push(g);
+    byWeek[wKey].total += g.total;
+  }
+
+  function toggleDay(key) {
+    setExpandedDays((s) => {
+      const n = new Set(s);
+      n.has(key) ? n.delete(key) : n.add(key);
+      return n;
+    });
+  }
+  function toggleWeek(key) {
+    setExpandedWeeks((s) => {
+      const n = new Set(s);
+      n.has(key) ? n.delete(key) : n.add(key);
+      return n;
+    });
   }
 
   return (
@@ -694,9 +755,11 @@ export default function Timer() {
             Nessuna voce trovata negli ultimi 70 giorni.
           </div>
         )
-      ) : (
+      ) : search ? (
+        // Durante una ricerca mostro tutto disteso, senza accordion:
+        // stai cercando qualcosa di specifico, non vuoi altri click.
         <>
-          <div className="section-label">Ultimi lavori</div>
+          <div className="section-label">Risultati</div>
           {groups.map((g) => (
             <div key={g.key}>
               <div className="day-total">
@@ -710,6 +773,74 @@ export default function Timer() {
               </div>
             </div>
           ))}
+        </>
+      ) : (
+        <>
+          <div className="section-label">Ultimi lavori</div>
+
+          {/* Oggi: sempre estesa */}
+          {todayGroup && (
+            <div>
+              <div className="day-total">
+                <span className="t-label">{todayGroup.label}</span>
+                <span className="t-value">{fmtDuration(todayGroup.total)}</span>
+              </div>
+              <div className="card">
+                {todayGroup.items.map((e) => (
+                  <EntryRow key={e.id} entry={e} onEdit={setEditorEntry} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Altri giorni della settimana corrente: apribili uno a uno */}
+          {thisWeekDayGroups.map((g) => {
+            const open = expandedDays.has(g.key);
+            return (
+              <div key={g.key} className="accordion-group">
+                <button className="accordion-head" onClick={() => toggleDay(g.key)}>
+                  <span className="accordion-chevron">{open ? "▾" : "▸"}</span>
+                  <span className="t-label" style={{ flex: 1, textAlign: "left" }}>{g.label}</span>
+                  <span className="t-value">{fmtDuration(g.total)}</span>
+                </button>
+                {open && (
+                  <div className="card">
+                    {g.items.map((e) => (
+                      <EntryRow key={e.id} entry={e} onEdit={setEditorEntry} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Settimane precedenti: un click apre la settimana e mostra tutti i suoi giorni */}
+          {weekBuckets.map((w) => {
+            const open = expandedWeeks.has(w.key);
+            return (
+              <div key={w.key} className="accordion-group">
+                <button className="accordion-head" onClick={() => toggleWeek(w.key)}>
+                  <span className="accordion-chevron">{open ? "▾" : "▸"}</span>
+                  <span className="t-label" style={{ flex: 1, textAlign: "left" }}>{w.label}</span>
+                  <span className="t-value">{fmtDuration(w.total)}</span>
+                </button>
+                {open &&
+                  w.days.map((g) => (
+                    <div key={g.key} style={{ marginTop: 8 }}>
+                      <div className="day-total day-total-sub">
+                        <span className="t-label">{g.label}</span>
+                        <span className="t-value">{fmtDuration(g.total)}</span>
+                      </div>
+                      <div className="card">
+                        {g.items.map((e) => (
+                          <EntryRow key={e.id} entry={e} onEdit={setEditorEntry} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            );
+          })}
         </>
       )}
       </div>{/* /timer-col-side */}
