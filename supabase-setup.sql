@@ -263,9 +263,11 @@ drop policy if exists timeoff_select on public.time_off;
 create policy timeoff_select on public.time_off
   for select using (user_id = auth.uid() or public.is_admin());
 
+-- v27: un admin può inserire un'assenza (già approvata) per conto di
+-- un'altra persona. Prima l'insert era permesso solo su sé stessi.
 drop policy if exists timeoff_insert on public.time_off;
 create policy timeoff_insert on public.time_off
-  for insert with check (user_id = auth.uid() and public.is_active());
+  for insert with check ((user_id = auth.uid() and public.is_active()) or public.is_admin());
 
 drop policy if exists timeoff_update on public.time_off;
 create policy timeoff_update on public.time_off

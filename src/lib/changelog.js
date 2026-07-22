@@ -2,10 +2,25 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "26";
+export const CURRENT_VERSION = "27";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "27",
+    date: "2026-07-22",
+    time: "16:18",
+    title: "Report colorati, aggiornamenti visibili e ferie più rapide",
+    items: [
+      "Nel Report, le barre dei progetti sono di nuovo ben visibili: alcuni progetti apparivano grigi su sfondo scuro",
+      "Quando esce una nuova versione dell'app compare un invito 'Aggiorna ora': puoi rimandare, ricomparirà alla prossima apertura",
+    ],
+    adminItems: [
+      "In Progetti: barra di ricerca per nome progetto o cliente e ordinamento per Nome o Cliente",
+      "I giorni rossi manuali (chiusure) ora accettano un intervallo Dal/Al: es. una settimana di chiusura estiva in un colpo solo, con avviso pop-up che cita l'intervallo",
+      "Nuovo pannello 'Registra un'assenza per una persona': inserisci ferie, permessi o malattie già approvati per chiunque, senza passare dal flusso di richiesta",
+    ],
+  },
   {
     version: "26",
     date: "2026-07-22",

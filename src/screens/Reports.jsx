@@ -35,10 +35,16 @@ export default function Reports() {
     const k = e.project_id || "none";
     byProject[k] = (byProject[k] || 0) + entrySeconds(e);
   }
+  // #27264d è il colore di DEFAULT dei progetti nel database: non è mai
+  // null, quindi il fallback alla palette non scattava mai e su sfondo
+  // scuro le barre sembravano tutte grigie. Lo tratto come "nessun colore
+  // personalizzato" così questi progetti prendono i colori della palette.
+  const DEFAULT_PROJECT_COLOR = "#27264d";
   const rows = Object.entries(byProject)
     .map(([id, secs]) => {
       const p = id === "none" ? null : projectById(id);
-      return { id, name: p?.name || "Senza progetto", color: p?.color || null, secs };
+      const custom = p?.color && p.color.toLowerCase() !== DEFAULT_PROJECT_COLOR ? p.color : null;
+      return { id, name: p?.name || "Senza progetto", color: custom, secs };
     })
     .sort((a, b) => b.secs - a.secs)
     .map((r, i) => ({ ...r, color: r.color || PALETTE[i % PALETTE.length] }));

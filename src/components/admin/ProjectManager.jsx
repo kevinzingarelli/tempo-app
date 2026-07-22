@@ -214,11 +214,24 @@ function ProjectForm({ project, onClose }) {
   );
 }
 
+// Normalizza il testo per la ricerca: minuscolo, senza accenti, spazi puliti.
+// Così "kesìa", "Kesia " e "KESIA" trovano lo stesso risultato.
+function normText(s) {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export default function ProjectManager() {
   const { projects, projectRate, clientById } = useData();
   const [formProject, setFormProject] = useState(null);
   const [creating, setCreating] = useState(false);
   const [totals, setTotals] = useState({}); // project_id -> { secs, users:Set }
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("name"); // "name" | "client"
 
   useEffect(() => {
     (async () => {
@@ -237,8 +250,26 @@ export default function ProjectManager() {
     })();
   }, []);
 
-  const active = projects.filter((p) => !p.archived);
-  const archived = projects.filter((p) => p.archived);
+  // Ricerca per nome progetto O nome del cliente collegato, e ordinamento
+  // per Nome o per Cliente (i progetti senza cliente finiscono in fondo).
+  const clientNameOf = (p) => (p.client_id ? clientById(p.client_id)?.name || "" : "");
+  const q = normText(search);
+  const matches = (p) =>
+    !q || normText(p.name).includes(q) || normText(clientNameOf(p)).includes(q);
+  const bySort = (a, b) => {
+    if (sortBy === "client") {
+      const ca = clientNameOf(a);
+      const cb = clientNameOf(b);
+      if (!ca && cb) return 1;
+      if (ca && !cb) return -1;
+      const c = ca.localeCompare(cb, "it");
+      if (c !== 0) return c;
+    }
+    return (a.name || "").localeCompare(b.name || "", "it");
+  };
+  const active = projects.filter((p) => !p.archived && matches(p)).sort(bySort);
+  const archived = projects.filter((p) => p.archived && matches(p)).sort(bySort);
+  const hasAnyActive = projects.some((p) => !p.archived);
 
   function line(p) {
     const rate = projectRate(p.id);
@@ -259,8 +290,33 @@ export default function ProjectManager() {
         <IconPlus style={{ width: 18, height: 18 }} /> Nuovo progetto
       </button>
 
-      {active.length === 0 && (
+      {hasAnyActive && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <input
+            className="field"
+            style={{ flex: 1 }}
+            placeholder="Cerca per progetto o cliente…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <select
+            className="field"
+            style={{ width: "auto", flexShrink: 0 }}
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            aria-label="Ordina per"
+          >
+            <option value="name">Ordina: Nome</option>
+            <option value="client">Ordina: Cliente</option>
+          </select>
+        </div>
+      )}
+
+      {!hasAnyActive && (
         <div className="empty"><div className="empty-emoji">📁</div>Nessun progetto. Creane uno per organizzare le ore.</div>
+      )}
+      {hasAnyActive && active.length === 0 && (
+        <div className="empty"><div className="empty-emoji">🔍</div>Nessun progetto trovato con questa ricerca.</div>
       )}
 
       {active.length > 0 && (

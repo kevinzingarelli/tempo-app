@@ -6,7 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
+      // "prompt": quando esce una nuova versione, l'app mostra un banner
+      // "Aggiorna ora" invece di aggiornarsi in silenzio (v27).
+      registerType: "prompt",
       includeAssets: ["favicon-32.png", "apple-touch-icon.png"],
       manifest: {
         name: "Boschetto",

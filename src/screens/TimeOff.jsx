@@ -120,10 +120,19 @@ export default function TimeOff() {
   const [sending, setSending] = useState(false);
 
   const [cDay, setCDay] = useState(isoToday());
+  const [cDayEnd, setCDayEnd] = useState(isoToday());
   const [cLabel, setCLabel] = useState("");
   const [cAnnounce, setCAnnounce] = useState(false);
   const [cAnnounceMsg, setCAnnounceMsg] = useState("");
   const [addingHoliday, setAddingHoliday] = useState(null);
+
+  // Pannello admin "Registra un'assenza per una persona" (v27)
+  const [aPerson, setAPerson] = useState("");
+  const [aKind, setAKind] = useState("ferie");
+  const [aStart, setAStart] = useState(isoToday());
+  const [aEnd, setAEnd] = useState(isoToday());
+  const [aNote, setANote] = useState("");
+  const [aSaving, setASaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -233,15 +242,33 @@ export default function TimeOff() {
     }
   }
 
-  async function addClosure(day, label) {
+  // Aggiunge una chiusura su un intervallo di date (v27): una riga in
+  // "closures" per OGNI giorno, weekend inclusi (è una chiusura aziendale).
+  // Un giorno singolo è un intervallo di 1. Usata anche dall'approvazione
+  // festività (che passa startDay === endDay).
+  async function addClosureRange(startDay, endDay, label) {
     if (!label?.trim()) { toast("Dai un nome al giorno rosso (es. Natale).", "error"); return; }
+    if (endDay < startDay) { toast("La data di fine è prima dell'inizio.", "error"); return; }
+    const days = [];
+    let d = new Date(startDay + "T00:00:00");
+    const last = new Date(endDay + "T00:00:00");
+    while (d <= last) { days.push(toISO(d)); d = new Date(d.getTime() + 86400000); }
+    // protezione anti-errore di battitura (es. anno sbagliato)
+    if (days.length > 60) { toast("Intervallo troppo lungo (oltre 60 giorni). Controlla le date.", "error"); return; }
     try {
-      const { error } = await supabase.from("closures").upsert({ day, label: label.trim() }, { onConflict: "day" });
+      const { error } = await supabase
+        .from("closures")
+        .upsert(days.map((day) => ({ day, label: label.trim() })), { onConflict: "day" });
       if (error) throw error;
       if (cAnnounce) {
+        const opt = { weekday: "long", day: "numeric", month: "long" };
+        const fmtA = new Date(startDay + "T12:00:00").toLocaleDateString("it-IT", opt);
+        const fmtB = new Date(endDay + "T12:00:00").toLocaleDateString("it-IT", opt);
         const msg =
           cAnnounceMsg.trim() ||
-          `Il ${new Date(day + "T12:00:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })} l'azienda è chiusa (${label.trim()}).`;
+          (startDay === endDay
+            ? `Il ${fmtA} l'azienda è chiusa (${label.trim()}).`
+            : `Da ${fmtA} a ${fmtB} l'azienda è chiusa (${label.trim()}).`);
         const { error: e2 } = await supabase
           .from("announcements")
           .insert({ title: "Comunicazione: chiusura aziendale", message: msg, created_by: user.id, active: true });
@@ -249,11 +276,49 @@ export default function TimeOff() {
         setCAnnounce(false);
         setCAnnounceMsg("");
       }
-      toast("Giorno rosso aggiunto." + (cAnnounce ? " Avviso inviato a tutti." : ""), "ok");
+      toast(
+        (days.length === 1 ? "Giorno rosso aggiunto." : `${days.length} giorni rossi aggiunti.`) +
+          (cAnnounce ? " Avviso inviato a tutti." : ""),
+        "ok"
+      );
       setCLabel("");
       load();
     } catch (e) {
       toast(friendlyError(e), "error");
+    }
+  }
+
+  // Registra un'assenza già approvata per conto di una persona (v27, solo
+  // admin). Salta il flusso richiesta-approvazione: è l'admin a confermarla.
+  async function saveAdminAbsence() {
+    if (!aPerson) { toast("Scegli la persona.", "error"); return; }
+    if (aEnd < aStart) { toast("La data di fine è prima dell'inizio.", "error"); return; }
+    setASaving(true);
+    try {
+      const { error } = await supabase.from("time_off").insert({
+        user_id: aPerson,
+        start_date: aStart,
+        end_date: aEnd,
+        kind: aKind,
+        note: aNote.trim() || null,
+        status: "approved",
+        decided_by: user.id,
+        decided_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+      toast("Assenza registrata e già approvata.", "ok");
+      setANote("");
+      load();
+    } catch (e) {
+      const code = e?.code || "";
+      const msg = (e?.message || "").toLowerCase();
+      if (code === "42501" || msg.includes("row-level security")) {
+        toast("Il database non è ancora aggiornato: esegui lo script SQL su Supabase (policy assenze).", "error");
+      } else {
+        toast(friendlyError(e), "error");
+      }
+    } finally {
+      setASaving(false);
     }
   }
 
@@ -756,6 +821,46 @@ export default function TimeOff() {
             </div>
           )}
 
+          <div className="section-label">Registra un'assenza per una persona</div>
+          <div className="card" style={{ padding: 16 }}>
+            <p className="muted" style={{ fontSize: 12.5, marginTop: 0, marginBottom: 12 }}>
+              Inserimento diretto, già approvato: utile per registrare le tue assenze o quelle comunicate a voce, senza passare dalla richiesta.
+            </p>
+            <label className="field-label">Persona</label>
+            <select className="field" value={aPerson} onChange={(e) => setAPerson(e.target.value)}>
+              <option value="">Scegli la persona…</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.name || "Senza nome"}</option>
+              ))}
+            </select>
+            <label className="field-label" style={{ marginTop: 10 }}>Tipo di assenza</label>
+            <div className="segment" style={{ marginBottom: 12 }}>
+              {[["ferie", "🏖️ Ferie"], ["permesso", "🕐 Permesso"], ["malattia", "🤒 Malattia"]].map(([k, l]) => (
+                <button key={k} className={aKind === k ? "active" : ""} onClick={() => setAKind(k)}>{l}</button>
+              ))}
+            </div>
+            <div className="grid-2">
+              <div>
+                <label className="field-label">Dal</label>
+                <input type="date" className="field" value={aStart} onChange={(e) => { setAStart(e.target.value); if (aEnd < e.target.value) setAEnd(e.target.value); }} />
+              </div>
+              <div>
+                <label className="field-label">Al</label>
+                <input type="date" className="field" value={aEnd} min={aStart} onChange={(e) => setAEnd(e.target.value)} />
+              </div>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <label className="field-label">Nota (facoltativa)</label>
+              <input className="field" placeholder="Es. comunicata a voce" value={aNote} onChange={(e) => setANote(e.target.value)} />
+            </div>
+            <div className="muted" style={{ fontSize: 12.5, margin: "8px 0 12px" }}>
+              {daysBetween(aStart, aEnd)} {daysBetween(aStart, aEnd) === 1 ? "giorno" : "giorni"} · comparirà subito nel calendario come approvata.
+            </div>
+            <button className="btn btn-primary btn-block" onClick={saveAdminAbsence} disabled={aSaving}>
+              {aSaving ? <span className="spinner spinner-white" /> : <><IconPlus style={{ width: 16, height: 16 }} /> Registra assenza</>}
+            </button>
+          </div>
+
           <div className="section-label">Festività da approvare come chiusura</div>
           {proposedHolidays.length === 0 ? (
             <div className="empty" style={{ padding: 22 }}>Nessuna proposta al momento.</div>
@@ -772,7 +877,7 @@ export default function TimeOff() {
                   <button
                     className="btn btn-soft btn-sm"
                     disabled={addingHoliday === h.day}
-                    onClick={async () => { setAddingHoliday(h.day); await addClosure(h.day, h.label); setAddingHoliday(null); }}
+                    onClick={async () => { setAddingHoliday(h.day); await addClosureRange(h.day, h.day, h.label); setAddingHoliday(null); }}
                   >
                     <IconCheck style={{ width: 15, height: 15 }} /> Approva
                   </button>
@@ -886,11 +991,23 @@ export default function TimeOff() {
 
       {isAdmin && (
         <div className="card" style={{ padding: 16, marginTop: 12 }}>
-          <label className="field-label">Aggiungi un giorno rosso manuale</label>
+          <label className="field-label">Aggiungi giorni rossi manuali</label>
           <div className="grid-2" style={{ marginTop: 2 }}>
-            <input type="date" className="field" value={cDay} onChange={(e) => setCDay(e.target.value)} />
-            <input className="field" placeholder="Es. Chiusura estiva" value={cLabel} onChange={(e) => setCLabel(e.target.value)} />
+            <div>
+              <label className="field-label">Dal</label>
+              <input type="date" className="field" value={cDay} onChange={(e) => { setCDay(e.target.value); if (cDayEnd < e.target.value) setCDayEnd(e.target.value); }} />
+            </div>
+            <div>
+              <label className="field-label">Al</label>
+              <input type="date" className="field" value={cDayEnd} min={cDay} onChange={(e) => setCDayEnd(e.target.value)} />
+            </div>
           </div>
+          <input className="field" style={{ marginTop: 8 }} placeholder="Es. Chiusura estiva" value={cLabel} onChange={(e) => setCLabel(e.target.value)} />
+          {cDay !== cDayEnd && cDayEnd >= cDay && (
+            <p className="muted" style={{ fontSize: 12, margin: "6px 0 0" }}>
+              Verranno segnati come chiusi {daysBetween(cDay, cDayEnd)} giorni, weekend inclusi.
+            </p>
+          )}
 
           <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13.5 }}>
             <input type="checkbox" checked={cAnnounce} onChange={(e) => setCAnnounce(e.target.checked)} />
@@ -906,7 +1023,7 @@ export default function TimeOff() {
             />
           )}
 
-          <button className="btn btn-soft btn-block" style={{ marginTop: 10 }} onClick={() => addClosure(cDay, cLabel)}>
+          <button className="btn btn-soft btn-block" style={{ marginTop: 10 }} onClick={() => addClosureRange(cDay, cDayEnd, cLabel)}>
             <IconCalendar style={{ width: 16, height: 16 }} /> Segna come chiusura
           </button>
 

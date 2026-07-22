@@ -8,18 +8,10 @@ import { applyTheme, watchSystemTheme } from "./lib/theme.js";
 applyTheme();
 watchSystemTheme();
 
-// Registrazione service worker (PWA / aggiornamenti automatici).
-// Avvolta in try/catch per non bloccare l'app se non disponibile.
-try {
-  // eslint-disable-next-line import/no-unresolved
-  import("virtual:pwa-register")
-    .then(({ registerSW }) => {
-      registerSW({ immediate: true });
-    })
-    .catch(() => {});
-} catch (e) {
-  /* ignora */
-}
+// La registrazione del service worker (PWA) ora vive nel componente
+// UpdateBanner (montato in App.jsx): con registerType "prompt" serve React
+// per mostrare il banner "nuova versione disponibile". Registrarlo anche
+// qui creerebbe una doppia registrazione.
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
