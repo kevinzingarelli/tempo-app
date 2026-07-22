@@ -11,6 +11,7 @@ import ConfigNeeded from "./screens/ConfigNeeded.jsx";
 import BottomNav from "./components/BottomNav.jsx";
 import ClosureAnnouncement from "./components/ClosureAnnouncement.jsx";
 import UpdateBanner from "./components/UpdateBanner.jsx";
+import TabTimer from "./components/TabTimer.jsx";
 import { IconClock } from "./lib/icons.jsx";
 import { entrySeconds } from "./lib/format.js";
 import { useState as useStateReact, useEffect as useEffectReact } from "react";
@@ -89,6 +90,7 @@ function MainApp() {
       <div className="app-shell">
         <ClosureAnnouncement />
         <UpdateBanner />
+        <TabTimer />
         <OfflinePill />
         <LongTimerPill tab={tab} setTab={setTab} />
         {tab === "timer" && <Timer />}

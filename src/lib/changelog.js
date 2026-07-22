@@ -2,10 +2,24 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "27";
+export const CURRENT_VERSION = "28";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "28",
+    date: "2026-07-22",
+    time: "22:40",
+    title: "Preferiti più intelligenti e timer nella scheda del browser",
+    items: [
+      "Se avvii un Preferito mentre un timer è già attivo, l'app ti chiede cosa fare invece di sostituirlo in silenzio",
+      "Con l'app aperta nel browser del computer, la scheda mostra il tempo che scorre e un pallino sull'icona: verde se attivo, giallo in pausa",
+    ],
+    adminItems: [
+      "Il secondo timer in parallelo ha ora l'avvio rapido dai Preferiti, con un tocco",
+      "Quando avvii un Preferito col timer attivo potete scegliere: avviarlo in parallelo oppure sostituire quello in corso",
+    ],
+  },
   {
     version: "27",
     date: "2026-07-22",

@@ -95,6 +95,7 @@ export default function Timer() {
     };
   }, []);
   const [parallelOpen, setParallelOpen] = useState(false);
+  const [favToStart, setFavToStart] = useState(null); // preferito in attesa di scelta (v28)
   const [parallelDesc, setParallelDesc] = useState("");
   const [parallelProject, setParallelProject] = useState(null);
   const [parallelPickerOpen, setParallelPickerOpen] = useState(false);
@@ -242,6 +243,18 @@ export default function Timer() {
     stopTimer(runningEntry?.id);
     setDraftDesc("");
     setDraftProject(null);
+  }
+
+  // Avvio da preferito (v28): se c'è già un timer attivo, chiedo cosa fare
+  // invece di sostituirlo in silenzio. Gli admin possono anche avviarlo in
+  // parallelo; i dipendenti confermano la sostituzione.
+  function handleFavoriteClick(f) {
+    if (running) {
+      setPickerOpen(false); // evita pannelli sovrapposti
+      setFavToStart(f);
+    } else {
+      startFromFavorite(f);
+    }
   }
 
   // Timer in parallelo — riservato agli admin (Kevin, Asia). Avvia un
@@ -640,7 +653,7 @@ export default function Timer() {
                   />
                   <div
                     className="entry-main"
-                    onClick={() => startFromFavorite(f)}
+                    onClick={() => handleFavoriteClick(f)}
                     style={{ cursor: "pointer" }}
                   >
                     <div className="entry-desc">
@@ -650,7 +663,7 @@ export default function Timer() {
                   </div>
                   <button
                     className="entry-play"
-                    onClick={() => startFromFavorite(f)}
+                    onClick={() => handleFavoriteClick(f)}
                     aria-label="Avvia preferito"
                   >
                     <IconPlay />
@@ -852,8 +865,8 @@ export default function Timer() {
         onClose={() => setPickerOpen(false)}
         value={draftProject}
         onChange={handleProjectChange}
-        favorites={running ? undefined : favorites}
-        onPickFavorite={running ? undefined : (f) => startFromFavorite(f)}
+        favorites={favorites}
+        onPickFavorite={(f) => handleFavoriteClick(f)}
       />
       {addOpen && <EntryEditor open={addOpen} onClose={() => setAddOpen(false)} />}
       {editorEntry && (
@@ -864,11 +877,68 @@ export default function Timer() {
         />
       )}
 
+      {/* Scelta all'avvio di un preferito con timer già attivo (v28) */}
+      <Sheet open={!!favToStart} onClose={() => setFavToStart(null)} title="C'è già un timer attivo">
+        {favToStart && (
+          <>
+            <p className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
+              Stai lavorando su:{" "}
+              <b>{runningEntry?.description || projectById(runningEntry?.project_id)?.name || "senza descrizione"}</b>
+            </p>
+            <p className="muted" style={{ fontSize: 13, marginBottom: 14 }}>
+              Vuoi avviare <b>{favToStart.description || projectById(favToStart.project_id)?.name || "il preferito"}</b>?
+            </p>
+            {isAdmin && (
+              <button
+                className="btn btn-primary btn-block btn-lg"
+                onClick={async () => { const f = favToStart; setFavToStart(null); await startFromFavorite(f, { parallel: true }); }}
+              >
+                <IconPlay /> Avvia in parallelo (il primo continua)
+              </button>
+            )}
+            <button
+              className={"btn btn-block " + (isAdmin ? "btn-soft" : "btn-primary btn-lg")}
+              style={{ marginTop: 10 }}
+              onClick={async () => { const f = favToStart; setFavToStart(null); await startFromFavorite(f); }}
+            >
+              <IconStop /> Ferma il timer attivo e sostituiscilo
+            </button>
+            <button className="btn btn-ghost btn-block" style={{ marginTop: 10 }} onClick={() => setFavToStart(null)}>
+              Annulla
+            </button>
+          </>
+        )}
+      </Sheet>
+
       {isAdmin && (
         <Sheet open={parallelOpen} onClose={() => setParallelOpen(false)} title="Secondo timer in parallelo">
           <p className="muted" style={{ fontSize: 12.5, marginBottom: 12 }}>
             Il timer già in corso non si ferma: ne parte un altro accanto. Funzione riservata agli amministratori.
           </p>
+
+          {/* Preferiti: avvio rapido in parallelo con un tocco (v28) */}
+          {favorites.length > 0 && (
+            <>
+              <label className="field-label">Avvio rapido dai Preferiti</label>
+              <div className="card" style={{ marginBottom: 12 }}>
+                {favorites.map((f) => {
+                  const p = projectById(f.project_id);
+                  return (
+                    <div key={f.id} className="entry" style={{ cursor: "pointer" }}
+                      onClick={async () => { setParallelOpen(false); await startFromFavorite(f, { parallel: true }); }}>
+                      <span className="entry-dot" style={{ background: p?.color || "#cfcfca" }} />
+                      <div className="entry-main">
+                        <div className="entry-desc">{f.description || <span className="muted">Senza descrizione</span>}</div>
+                        {p && <div className="entry-sub">{p.name}</div>}
+                      </div>
+                      <span className="entry-play" aria-hidden><IconPlay /></span>
+                    </div>
+                  );
+                })}
+              </div>
+              <label className="field-label">…oppure compila a mano</label>
+            </>
+          )}
           <label className="field-label">Cosa stai facendo</label>
           <input
             className="field"

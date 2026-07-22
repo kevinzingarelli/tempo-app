@@ -516,16 +516,19 @@ export function DataProvider({ children }) {
     [persist]
   );
 
+  // opts.parallel = true avvia il preferito SENZA fermare il timer in corso
+  // (funzione riservata agli admin, come il secondo timer manuale — v28).
   const startFromFavorite = useCallback(
-    async (fav) => {
+    async (fav, opts = {}) => {
       const proj = projects.find((p) => p.id === fav.project_id);
       await startTimer({
         description: fav.description,
         project_id: fav.project_id,
         tags: fav.tags || [],
         billable: proj?.billable_default || false,
+        parallel: !!opts.parallel,
       });
-      toast("Timer avviato", "ok");
+      toast(opts.parallel ? "Secondo timer avviato" : "Timer avviato", "ok");
     },
     [projects, startTimer, toast]
   );
