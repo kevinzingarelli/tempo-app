@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../state/AuthContext.jsx";
 import { useData } from "../state/DataContext.jsx";
 import { IconPlus, IconCalendar, IconCheck } from "../lib/icons.jsx";
-import { leaveBalance, fmtDaysHours } from "../lib/leave.js";
+import { leaveBalance, fmtDaysHours, periodKey, computeCheckpointProposal } from "../lib/leave.js";
 
 function LeaveStat({ label, bal, hpd }) {
   return (
@@ -103,6 +103,11 @@ export default function TimeOff() {
   const [people, setPeople] = useState({});
   const [peopleLeave, setPeopleLeave] = useState({});
   const [profiles, setProfiles] = useState([]);
+  const [activeAnnouncements, setActiveAnnouncements] = useState([]);
+  const [checkpoints, setCheckpoints] = useState([]);
+  const [cpBusy, setCpBusy] = useState({}); // { [userId]: true } mentre si salva
+  const [onboardValues, setOnboardValues] = useState({}); // { [userId]: "12" }
+  const [proposalOverrides, setProposalOverrides] = useState({}); // { [userId]: "13.5" }
   const [filterPerson, setFilterPerson] = useState("all");
   const [closures, setClosures] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -116,6 +121,8 @@ export default function TimeOff() {
 
   const [cDay, setCDay] = useState(isoToday());
   const [cLabel, setCLabel] = useState("");
+  const [cAnnounce, setCAnnounce] = useState(false);
+  const [cAnnounceMsg, setCAnnounceMsg] = useState("");
   const [addingHoliday, setAddingHoliday] = useState(null);
 
   const load = useCallback(async () => {
@@ -130,9 +137,11 @@ export default function TimeOff() {
       setMine(mineRes.data || []);
       setClosures(closRes.data || []);
       if (isAdmin) {
-        const [allRes, profRes] = await Promise.all([
+        const [allRes, profRes, annRes, cpRes] = await Promise.all([
           supabase.from("time_off").select("*").order("created_at", { ascending: false }),
           supabase.from("profiles").select("id, name, active, annual_leave_days, annual_leave_hours, annual_permit_hours, work_hours_per_day"),
+          supabase.from("announcements").select("*").eq("active", true).order("created_at", { ascending: false }),
+          supabase.from("leave_checkpoints").select("*").order("period", { ascending: false }),
         ]);
         setAllReq(allRes.data || []);
         const m = {};
@@ -146,6 +155,8 @@ export default function TimeOff() {
         setPeople(m);
         setPeopleLeave(leaveMap);
         setProfiles(profList);
+        setActiveAnnouncements(annRes.data || []);
+        setCheckpoints(cpRes.data || []);
       }
     } catch (e) {
       toast(friendlyError(e), "error");
@@ -211,12 +222,34 @@ export default function TimeOff() {
     }
   }
 
+  async function deactivateAnnouncement(id) {
+    try {
+      const { error } = await supabase.from("announcements").update({ active: false }).eq("id", id);
+      if (error) throw error;
+      toast("Avviso disattivato.", "ok");
+      load();
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    }
+  }
+
   async function addClosure(day, label) {
     if (!label?.trim()) { toast("Dai un nome al giorno rosso (es. Natale).", "error"); return; }
     try {
       const { error } = await supabase.from("closures").upsert({ day, label: label.trim() }, { onConflict: "day" });
       if (error) throw error;
-      toast("Giorno rosso aggiunto.", "ok");
+      if (cAnnounce) {
+        const msg =
+          cAnnounceMsg.trim() ||
+          `Il ${new Date(day + "T12:00:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })} l'azienda è chiusa (${label.trim()}).`;
+        const { error: e2 } = await supabase
+          .from("announcements")
+          .insert({ title: "Comunicazione: chiusura aziendale", message: msg, created_by: user.id, active: true });
+        if (e2) throw e2;
+        setCAnnounce(false);
+        setCAnnounceMsg("");
+      }
+      toast("Giorno rosso aggiunto." + (cAnnounce ? " Avviso inviato a tutti." : ""), "ok");
       setCLabel("");
       load();
     } catch (e) {
@@ -305,11 +338,91 @@ export default function TimeOff() {
       .map((p) => {
         const reqs = allReq.filter((r) => r.user_id === p.id);
         const bal = leaveBalance(p, reqs);
-        return bal ? { id: p.id, name: p.name || "Senza nome", bal } : null;
+        const lastCp = checkpoints.find((c) => c.user_id === p.id) || null; // il più recente (già ordinati)
+        return bal ? { id: p.id, name: p.name || "Senza nome", bal, lastCp } : null;
       })
       .filter(Boolean)
       .sort((a, b) => a.name.localeCompare(b.name));
   })();
+
+  // Saldi ferie a checkpoint: chi non ha MAI un saldo confermato (onboarding
+  // necessario) e chi ha un saldo confermato ma non ancora per il mese
+  // corrente (proposta da rivedere/confermare).
+  const currentPeriod = periodKey(new Date());
+  const { needsOnboarding, pendingProposals } = (() => {
+    if (!isAdmin) return { needsOnboarding: [], pendingProposals: [] };
+    const onboarding = [];
+    const pending = [];
+    for (const p of profiles) {
+      const cps = checkpoints.filter((c) => c.user_id === p.id); // già ordinati per period desc
+      const last = cps[0] || null;
+      if (!last) {
+        onboarding.push(p);
+        continue;
+      }
+      if (last.period >= currentPeriod) continue; // già a posto per questo mese
+      const reqs = allReq.filter((r) => r.user_id === p.id);
+      const proposal = computeCheckpointProposal(last, p, reqs, currentPeriod);
+      if (proposal) pending.push({ profile: p, last, proposal });
+    }
+    return { needsOnboarding: onboarding, pendingProposals: pending };
+  })();
+
+  async function confirmOnboarding(personId) {
+    const raw = onboardValues[personId];
+    const days = raw != null ? parseFloat(String(raw).replace(",", ".")) : NaN;
+    if (!Number.isFinite(days) || days < 0) {
+      toast("Inserisci un numero di giorni valido.", "error");
+      return;
+    }
+    setCpBusy((s) => ({ ...s, [personId]: true }));
+    try {
+      const { error } = await supabase.from("leave_checkpoints").insert({
+        user_id: personId,
+        period: currentPeriod,
+        opening_days: days,
+        note: "Saldo iniziale inserito manualmente",
+        confirmed_by: user.id,
+      });
+      if (error) throw error;
+      toast("Saldo iniziale salvato.", "ok");
+      load();
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    } finally {
+      setCpBusy((s) => ({ ...s, [personId]: false }));
+    }
+  }
+
+  async function confirmProposal(personId, proposal, overrideValue) {
+    const days = overrideValue != null && overrideValue !== ""
+      ? parseFloat(String(overrideValue).replace(",", "."))
+      : proposal.proposedOpeningDays;
+    if (!Number.isFinite(days) || days < 0) {
+      toast("Inserisci un numero di giorni valido.", "error");
+      return;
+    }
+    const corrected = overrideValue != null && overrideValue !== "" && days !== proposal.proposedOpeningDays;
+    setCpBusy((s) => ({ ...s, [personId]: true }));
+    try {
+      const { error } = await supabase.from("leave_checkpoints").insert({
+        user_id: personId,
+        period: proposal.toPeriod,
+        opening_days: days,
+        accrued_days: proposal.accruedDays,
+        used_days: proposal.usedDays,
+        note: corrected ? "Corretto manualmente dall'admin" : "Confermato automaticamente (maturato - preso)",
+        confirmed_by: user.id,
+      });
+      if (error) throw error;
+      toast("Saldo confermato.", "ok");
+      load();
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    } finally {
+      setCpBusy((s) => ({ ...s, [personId]: false }));
+    }
+  }
 
   const closureDays = new Set(closures.map((c) => c.day));
   const proposedHolidays = [...nationalHolidays(month.getFullYear()), ...nationalHolidays(month.getFullYear() + 1)]
@@ -382,6 +495,74 @@ export default function TimeOff() {
         <div className="screen-title">Ferie</div>
         <div className="screen-sub">Calendario aziendale, richieste e chiusure</div>
       </div>
+
+      {isAdmin && (needsOnboarding.length > 0 || pendingProposals.length > 0) && (
+        <div className="card" style={{ padding: 16, marginBottom: 14, borderLeft: "3px solid var(--warn)" }}>
+          <div style={{ fontWeight: 700, fontSize: 14.5, marginBottom: 4 }}>📋 Saldi ferie da rivedere</div>
+          <p className="muted" style={{ fontSize: 12.5, marginBottom: 12 }}>
+            Stima gestionale interna, non sostituisce il saldo ufficiale del consulente del lavoro.
+          </p>
+
+          {needsOnboarding.map((p) => (
+            <div key={p.id} className="card" style={{ padding: 12, marginBottom: 8, background: "var(--surface-2)" }}>
+              <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6 }}>{p.name}</div>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                Non abbiamo ancora un saldo per questa persona. Quanti giorni di ferie residui ha oggi?
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  className="field"
+                  type="number"
+                  step="0.5"
+                  placeholder="Es. 12"
+                  style={{ flex: 1 }}
+                  value={onboardValues[p.id] ?? ""}
+                  onChange={(e) => setOnboardValues((s) => ({ ...s, [p.id]: e.target.value }))}
+                />
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={cpBusy[p.id]}
+                  onClick={() => confirmOnboarding(p.id)}
+                >
+                  Salva
+                </button>
+              </div>
+            </div>
+          ))}
+
+          {pendingProposals.map(({ profile: p, last, proposal }) => (
+            <div key={p.id} className="card" style={{ padding: 12, marginBottom: 8, background: "var(--surface-2)" }}>
+              <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6 }}>{p.name}</div>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 8, lineHeight: 1.5 }}>
+                Aveva <b>{last.opening_days}g</b> al{" "}
+                {new Date(proposal.fromPeriod + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "long" })}.
+                Ha maturato <b>{proposal.accruedDays}g</b>
+                {proposal.usedDays > 0 ? <> e preso <b>{proposal.usedDays}g</b></> : ""} nel frattempo.
+                {" "}Proponiamo <b>{proposal.proposedOpeningDays}g</b> dal{" "}
+                {new Date(proposal.toPeriod + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "long" })}.
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  className="field"
+                  type="number"
+                  step="0.5"
+                  placeholder={String(proposal.proposedOpeningDays)}
+                  style={{ flex: 1 }}
+                  value={proposalOverrides[p.id] ?? ""}
+                  onChange={(e) => setProposalOverrides((s) => ({ ...s, [p.id]: e.target.value }))}
+                />
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={cpBusy[p.id]}
+                  onClick={() => confirmProposal(p.id, proposal, proposalOverrides[p.id])}
+                >
+                  Conferma
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="admin-wide">
       <div>
@@ -460,16 +641,16 @@ export default function TimeOff() {
 
                 {isAdmin && teamAbs.length > 0 && (
                   <span className="cal-people">
-                    {teamAbs.slice(0, 4).map((a) => (
+                    {teamAbs.slice(0, 3).map((a) => (
                       <span
                         key={a.id}
                         className={"cal-person " + (a.status === "pending" ? "is-pending" : "is-approved")}
                         title={`${a.name} · ${a.status === "pending" ? "in attesa" : "approvata"}${a.kind !== "ferie" ? " · " + a.kind : ""}`}
                       >
-                        <span className="cal-person-i">{a.initial}</span>
+                        {a.initial}
                       </span>
                     ))}
-                    {teamAbs.length > 4 && <span className="cal-person-more">+{teamAbs.length - 4}</span>}
+                    {teamAbs.length > 3 && <span className="cal-person-more">+{teamAbs.length - 3}</span>}
                   </span>
                 )}
               </div>
@@ -536,6 +717,12 @@ export default function TimeOff() {
                     <LeaveStat label="Permessi" bal={s.bal.permessi} hpd={s.bal.hoursPerDay} />
                   )}
                 </div>
+                {s.lastCp && (
+                  <div className="muted" style={{ fontSize: 11.5, marginTop: 6 }}>
+                    📋 Saldo confermato: <b>{s.lastCp.opening_days}g</b> al{" "}
+                    {new Date(s.lastCp.period + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" })}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -704,9 +891,39 @@ export default function TimeOff() {
             <input type="date" className="field" value={cDay} onChange={(e) => setCDay(e.target.value)} />
             <input className="field" placeholder="Es. Chiusura estiva" value={cLabel} onChange={(e) => setCLabel(e.target.value)} />
           </div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, fontSize: 13.5 }}>
+            <input type="checkbox" checked={cAnnounce} onChange={(e) => setCAnnounce(e.target.checked)} />
+            Avvisa tutti con un pop-up (finché non premono "Ho capito")
+          </label>
+          {cAnnounce && (
+            <textarea
+              className="field"
+              style={{ marginTop: 8, minHeight: 64 }}
+              placeholder="Messaggio (facoltativo — se lo lasci vuoto genero un testo standard)"
+              value={cAnnounceMsg}
+              onChange={(e) => setCAnnounceMsg(e.target.value)}
+            />
+          )}
+
           <button className="btn btn-soft btn-block" style={{ marginTop: 10 }} onClick={() => addClosure(cDay, cLabel)}>
             <IconCalendar style={{ width: 16, height: 16 }} /> Segna come chiusura
           </button>
+
+          {activeAnnouncements.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <label className="field-label">Avvisi attivi (pop-up in corso)</label>
+              {activeAnnouncements.map((a) => (
+                <div key={a.id} className="list-action" style={{ marginTop: 6 }}>
+                  <span style={{ minWidth: 0, flex: 1 }}>
+                    <span style={{ fontWeight: 600, display: "block", fontSize: 13 }}>{a.title}</span>
+                    <span className="muted" style={{ fontSize: 12 }}>{a.message}</span>
+                  </span>
+                  <button className="btn btn-ghost btn-sm" onClick={() => deactivateAnnouncement(a.id)}>Disattiva</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

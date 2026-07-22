@@ -293,6 +293,76 @@ create policy closures_all on public.closures
   for all using (public.is_admin()) with check (public.is_admin());
 
 -- ============================================================
+--  AVVISI BLOCCANTI (es. chiusura aziendale) — aggiunto in Boschetto v26.
+--  Un admin crea un avviso; ogni utente deve "confermare" (ack) prima che
+--  il pop-up sparisca. Non distruttivo: crea solo se non esiste.
+-- ============================================================
+create table if not exists public.announcements (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  message text not null,
+  active boolean not null default true,
+  created_by uuid references public.profiles(id),
+  created_at timestamptz default now()
+);
+alter table public.announcements enable row level security;
+
+drop policy if exists announcements_select on public.announcements;
+create policy announcements_select on public.announcements
+  for select using (auth.uid() is not null);
+
+drop policy if exists announcements_write on public.announcements;
+create policy announcements_write on public.announcements
+  for all using (public.is_admin()) with check (public.is_admin());
+
+create table if not exists public.announcement_acks (
+  announcement_id uuid not null references public.announcements(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  acked_at timestamptz default now(),
+  primary key (announcement_id, user_id)
+);
+alter table public.announcement_acks enable row level security;
+
+drop policy if exists announcement_acks_select on public.announcement_acks;
+create policy announcement_acks_select on public.announcement_acks
+  for select using (user_id = auth.uid() or public.is_admin());
+
+drop policy if exists announcement_acks_insert on public.announcement_acks;
+create policy announcement_acks_insert on public.announcement_acks
+  for insert with check (user_id = auth.uid());
+
+-- ============================================================
+--  SALDI FERIE CONFERMATI MESE PER MESE — aggiunto in Boschetto v26.
+--  Ogni riga rappresenta il saldo ferie di una persona CONFERMATO
+--  dall'admin all'inizio di un mese ("period" = primo giorno del mese).
+--  L'app propone il saldo del mese successivo (maturato - preso), l'admin
+--  conferma o corregge. E' una stima gestionale: il saldo ufficiale resta
+--  quello del consulente del lavoro. Non distruttivo.
+-- ============================================================
+create table if not exists public.leave_checkpoints (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  period date not null, -- primo giorno del mese a cui si riferisce il saldo
+  opening_days numeric not null, -- giorni residui confermati all'inizio di questo mese
+  accrued_days numeric default 0, -- maturato nel mese precedente (informativo)
+  used_days numeric default 0, -- ferie approvate nel mese precedente (informativo)
+  note text,
+  confirmed_by uuid references public.profiles(id),
+  confirmed_at timestamptz default now(),
+  created_at timestamptz default now(),
+  unique (user_id, period)
+);
+alter table public.leave_checkpoints enable row level security;
+
+drop policy if exists leave_checkpoints_select on public.leave_checkpoints;
+create policy leave_checkpoints_select on public.leave_checkpoints
+  for select using (user_id = auth.uid() or public.is_admin());
+
+drop policy if exists leave_checkpoints_write on public.leave_checkpoints;
+create policy leave_checkpoints_write on public.leave_checkpoints
+  for all using (public.is_admin()) with check (public.is_admin());
+
+-- ============================================================
 --  NOTE SETTIMANALI ADMIN + BLOCCO PERIODI (aggiunto in Boschetto)
 --  Non distruttivo: crea solo se non esiste.
 -- ============================================================

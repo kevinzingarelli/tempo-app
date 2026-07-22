@@ -2,10 +2,23 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "25";
+export const CURRENT_VERSION = "26";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "26",
+    date: "2026-07-22",
+    time: "06:24",
+    title: "Calendario ferie più pulito e comunicazioni importanti",
+    items: [
+      "Il calendario ferie è più leggibile: risolto un problema che creava due pallini sovrapposti sulle iniziali, e le caselle hanno più spazio",
+    ],
+    adminItems: [
+      "Nuovo: saldi ferie con conferma mensile. Il primo saldo lo inserisci tu per ciascuna persona; ogni mese l'app propone il nuovo saldo (maturato meno preso) e tu confermi o correggi",
+      "Nuovo: puoi creare un avviso con pop-up bloccante (es. chiusura aziendale) che tutti devono confermare prima di continuare a usare l'app",
+    ],
+  },
   {
     version: "25",
     date: "2026-07-21",

@@ -9,6 +9,7 @@ import Admin from "./screens/Admin.jsx";
 import TimeOff from "./screens/TimeOff.jsx";
 import ConfigNeeded from "./screens/ConfigNeeded.jsx";
 import BottomNav from "./components/BottomNav.jsx";
+import ClosureAnnouncement from "./components/ClosureAnnouncement.jsx";
 import { IconClock } from "./lib/icons.jsx";
 import { entrySeconds } from "./lib/format.js";
 import { useState as useStateReact, useEffect as useEffectReact } from "react";
@@ -85,6 +86,7 @@ function MainApp() {
   return (
     <DataProvider>
       <div className="app-shell">
+        <ClosureAnnouncement />
         <OfflinePill />
         <LongTimerPill tab={tab} setTab={setTab} />
         {tab === "timer" && <Timer />}

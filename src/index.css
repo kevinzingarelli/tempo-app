@@ -1473,86 +1473,63 @@ img { -webkit-user-drag: none; user-select: none; }
   .kbd-hint { display: flex; }
 }
 
-/* ===== Iniziali persone in ferie sul calendario (v22) ===== */
-.cal-people {
-  display: flex; flex-wrap: wrap; gap: 2px;
-  justify-content: center; align-items: center;
-  margin-top: 2px; line-height: 1;
-}
-.cal-person {
-  position: relative;
-  display: inline-flex; align-items: center; justify-content: center;
-  font-size: 11px;
-}
-.cal-person-i {
-  font-size: 9px; font-weight: 800;
-  width: 15px; height: 15px; border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  margin-left: -3px;
-}
-/* Approvata: uovo di pettirosso (verde-azzurro tenue) */
-.cal-person.is-approved .cal-person-i {
-  background: #62c4b0; color: #0b3b32;
-}
-/* In attesa: giallo */
-.cal-person.is-pending .cal-person-i {
-  background: #f2c744; color: #4a3a00;
-}
-.cal-person-more {
-  font-size: 9px; font-weight: 700; color: var(--ink-faint);
-  align-self: center;
-}
+/* (il vecchio stile "iniziali v22" è stato rimosso in v26: creava un
+   pallino dentro un altro pallino insieme allo stile v23 — la causa del
+   disordine segnalato. Lo stile definitivo delle iniziali è più sotto.) */
 
-/* ===== Caselle ferie: sfondo colorato per stato + decorazione (v23) ===== */
+/* ===== Caselle ferie: sfondo colorato per stato + decorazione (v23, respiro v26) ===== */
+.cal-grid { gap: 5px; }
 .cal-cell {
   position: relative;
   overflow: hidden;
+  padding: 3px 2px;
+  border-radius: 9px;
 }
 .cal-cell.absence-pending {
   background: #fdecb0;
-  box-shadow: inset 0 0 0 1px #e8c85a;
+  box-shadow: inset 0 0 0 1.5px #e2bd4c;
 }
 .cal-cell.absence-approved {
   background: #bfe9de;
-  box-shadow: inset 0 0 0 1px #7bcdb9;
+  box-shadow: inset 0 0 0 1.5px #6bc3ac;
 }
 .cal-cell.absence-pending.today,
 .cal-cell.absence-approved.today {
-  box-shadow: inset 0 0 0 2px var(--brand);
+  box-shadow: inset 0 0 0 2.5px var(--brand);
 }
-/* emoji decorativa grande, semi-trasparente, dietro numero/iniziali */
+/* emoji decorativa di sfondo: piccola e in un angolo, non sotto al testo */
 .cal-bg-emoji {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 26px;
-  opacity: 0.4;
+  top: 1px; right: 2px;
+  font-size: 15px;
+  opacity: 0.55;
   pointer-events: none;
   z-index: 0;
+  line-height: 1;
 }
 .cal-daynum, .cal-my-mark, .cal-people {
   position: relative;
   z-index: 1;
 }
-.cal-my-mark { font-size: 13px; line-height: 1; margin-top: 1px; }
+.cal-daynum { font-size: 13.5px; }
+.cal-my-mark { font-size: 13px; line-height: 1; margin-top: 2px; }
 
-/* iniziali persona (admin): pallino solido colorato per stato */
+/* iniziali persona (admin): pallino solido colorato per stato, ben distanziati */
 .cal-people {
-  display: flex; flex-wrap: wrap; gap: 2px;
+  display: flex; flex-wrap: wrap; gap: 3px;
   justify-content: center; align-items: center;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 .cal-person {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 16px; height: 16px; border-radius: 50%;
-  font-size: 9px; font-weight: 800;
+  width: 17px; height: 17px; border-radius: 50%;
+  font-size: 9.5px; font-weight: 800;
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,0.65);
 }
-.cal-person.is-pending { background: #e8c85a; color: #4a3a00; }
-.cal-person.is-approved { background: #4fae9b; color: #ffffff; }
+.cal-person.is-pending { background: #e2bd4c; color: #453500; }
+.cal-person.is-approved { background: #4aa891; color: #ffffff; }
 .cal-person-more {
-  font-size: 9px; font-weight: 700; color: var(--ink-faint);
+  font-size: 9.5px; font-weight: 700; color: var(--ink-faint);
 }
 
 /* ===== Cronologia ad accordion (v25) ===== */
@@ -1577,3 +1554,28 @@ img { -webkit-user-drag: none; user-select: none; }
 }
 .day-total-sub .t-label { font-size: 12.5px; }
 .day-total-sub .t-value { font-size: 13.5px; }
+
+/* ===== Pop-up bloccante per avvisi (v26) ===== */
+.announce-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(20, 30, 24, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  backdrop-filter: blur(2px);
+}
+.announce-card {
+  background: var(--surface, #fff);
+  border-radius: 16px;
+  padding: 28px 22px 22px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+}
+.announce-icon { font-size: 36px; margin-bottom: 8px; }
+.announce-title { font-size: 18px; font-weight: 700; margin: 0 0 10px; }
+.announce-msg { font-size: 14px; color: var(--ink-soft); margin: 0 0 20px; line-height: 1.5; white-space: pre-wrap; }
