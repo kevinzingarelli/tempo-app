@@ -2,10 +2,22 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "28";
+export const CURRENT_VERSION = "29";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "29",
+    date: "2026-07-22",
+    time: "23:12",
+    title: "Nasce il boschetto",
+    items: [
+      "L'albero è sempre vivo: la chioma ondeggia con la brezza anche a riposo, e il vento si fa più deciso mentre il timer corre",
+      "Più stadi di crescita, uno ogni 5 ore: lo vedi cambiare molto più spesso (l'albero si completa sempre a 40 ore)",
+      "Quando completi un albero viene piantato nel tuo boschetto personale, in fila con gli altri, e ne germoglia subito uno nuovo",
+    ],
+    adminItems: [],
+  },
   {
     version: "28",
     date: "2026-07-22",

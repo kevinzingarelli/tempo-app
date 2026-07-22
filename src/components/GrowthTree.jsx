@@ -3,8 +3,12 @@ import { supabase } from "../lib/supabase";
 import { useData } from "../state/DataContext.jsx";
 import { entrySeconds, fmtDuration } from "../lib/format.js";
 
-// Ogni 10 ore lavorate personali = un passo di crescita "grande" (stadio).
-const HOURS_PER_STAGE = 10;
+// v29 — Un albero si completa ogni TREE_HOURS ore. Dentro quel percorso ci
+// sono più stadi ravvicinati (uno ogni HOURS_PER_STAGE) così la crescita si
+// vede spesso. Al completamento l'albero viene "piantato" nel boschetto e
+// ne ricomincia uno nuovo dal seme.
+const TREE_HOURS = 40;
+const HOURS_PER_STAGE = 5;
 
 // Formatta le ore mancanti in modo leggibile: sotto l'ora mostra i minuti
 // (es. "18 min"), sopra mostra ore e minuti (es. "1h 20min").
@@ -18,14 +22,28 @@ function fmtRemain(hours) {
 // Micro-crescita percepibile ogni 15 minuti.
 const MICRO_STEP_SECS = 15 * 60;
 
-const STAGES = ["Seme", "Germoglio", "Alberello", "Albero", "Albero fiorito"];
+const STAGES = [
+  "Seme",
+  "Germoglio",
+  "Piantina",
+  "Alberello",
+  "Giovane albero",
+  "Albero",
+  "Albero rigoglioso",
+  "Albero maturo",
+  "Albero fiorito",
+];
 
 // Palette foglie per stadio (dal tenero al rigoglioso)
 const LEAF = [
+  ["#a5dfb7", "#7fc99a"],
   ["#8fd6a6", "#6fbf8e"],
   ["#7fce97", "#57ac79"],
+  ["#6fc78a", "#4aa370"],
   ["#63c07f", "#3f9a67"],
+  ["#57b878", "#37905c"],
   ["#4fae7a", "#2f7d4f"],
+  ["#4aae86", "#2f7d4f"],
   ["#57b98a", "#2f7d4f"],
 ];
 
@@ -70,18 +88,27 @@ export default function GrowthTree({ userId }) {
   const totalSecs = baseSecs + liveSecs;
   const totalHours = totalSecs / 3600;
 
-  const stageIndex = Math.min(STAGES.length - 1, Math.floor(totalHours / HOURS_PER_STAGE));
-  const isMax = stageIndex >= STAGES.length - 1;
-  const intoStage = totalHours - stageIndex * HOURS_PER_STAGE;
-  const pct = isMax ? 100 : Math.min(100, (intoStage / HOURS_PER_STAGE) * 100);
-  const hoursToNext = Math.max(0, HOURS_PER_STAGE - intoStage);
+  // Alberi già completati (il boschetto) e ore dell'albero IN CORSO.
+  const treesGrown = Math.floor(totalHours / TREE_HOURS);
+  const treeHours = totalHours - treesGrown * TREE_HOURS;
+
+  const stageIndex = Math.min(STAGES.length - 1, Math.floor(treeHours / HOURS_PER_STAGE));
+  const intoStage = treeHours - stageIndex * HOURS_PER_STAGE;
+  const pct = Math.min(100, (treeHours / TREE_HOURS) * 100);
+  const hoursToNext =
+    stageIndex >= STAGES.length - 1
+      ? TREE_HOURS - treeHours // ultimo stadio: manca il completamento
+      : HOURS_PER_STAGE - intoStage;
+  const nextLabel =
+    stageIndex >= STAGES.length - 1
+      ? `Albero completo a ${TREE_HOURS}h`
+      : `Prossimo stadio a ${(stageIndex + 1) * HOURS_PER_STAGE}h`;
 
   // micro-progresso: quanti "scatti" da 15 min dentro lo stadio corrente
-  const microSteps = Math.floor((totalSecs % (HOURS_PER_STAGE * 3600)) / MICRO_STEP_SECS);
-  const treesGrown = Math.floor(totalHours / (HOURS_PER_STAGE * (STAGES.length - 1)));
+  const microSteps = Math.floor((intoStage * 3600) / MICRO_STEP_SECS);
 
-  // scala di crescita continua 0→1 sull'intero percorso di uno stadio
-  const growth = isMax ? 1 : intoStage / HOURS_PER_STAGE;
+  // crescita continua 0→1 sull'INTERA vita dell'albero (mai passi indietro)
+  const growth = Math.min(1, treeHours / TREE_HOURS);
   const isLive = runningEntries.some((e) => !e.paused_at);
 
   return (
@@ -95,7 +122,7 @@ export default function GrowthTree({ userId }) {
           </div>
           <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>
             {fmtDuration(totalSecs)} in totale
-            {treesGrown > 0 ? ` · ${treesGrown} ${treesGrown === 1 ? "albero completato" : "alberi completati"}` : ""}
+            {treesGrown > 0 ? ` · ${treesGrown} ${treesGrown === 1 ? "albero nel boschetto" : "alberi nel boschetto"}` : ""}
           </div>
         </div>
       </div>
@@ -104,8 +131,36 @@ export default function GrowthTree({ userId }) {
         <div className="growth-fill" style={{ width: `${pct}%` }} />
       </div>
       <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
-        {isMax ? "Albero completato." : `Prossimo stadio a ${(stageIndex + 1) * HOURS_PER_STAGE}h · mancano ${fmtRemain(hoursToNext)}`}
+        {nextLabel} · mancano {fmtRemain(hoursToNext)}
       </div>
+
+      {/* Il boschetto: gli alberi completati, piantati uno accanto all'altro */}
+      {treesGrown > 0 && (
+        <div className="growth-forest">
+          {Array.from({ length: Math.min(treesGrown, 10) }).map((_, i) => (
+            <div
+              key={i}
+              className="growth-forest-tree"
+              style={{
+                width: 30 + (i % 3) * 3,
+                transform: i % 2 === 1 ? "scaleX(-1)" : undefined,
+                "--wind-delay": `${(i % 5) * 0.9}s`,
+              }}
+              title={`Albero n. ${i + 1}`}
+            >
+              <TreeSVG
+                stageIndex={STAGES.length - 1}
+                growth={1}
+                microSteps={0}
+                live={false}
+                idp={`gtf${i}`}
+                size="100%"
+              />
+            </div>
+          ))}
+          {treesGrown > 10 && <span className="muted" style={{ fontSize: 12, alignSelf: "flex-end" }}>+{treesGrown - 10}</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -113,24 +168,26 @@ export default function GrowthTree({ userId }) {
 /**
  * Albero SVG stratificato: tronco + chioma a 3 livelli sovrapposti con
  * ombreggiature per un effetto di profondità (pseudo-3D). "growth" (0→1)
- * scala altezza tronco e ampiezza chioma; "microSteps" aggiunge foglioline.
+ * scala altezza tronco e ampiezza chioma sull'intera vita dell'albero;
+ * "microSteps" aggiunge foglioline. "idp" rende unici gli id dei gradienti
+ * (serve quando ci sono più alberi nella stessa pagina, es. il boschetto).
  */
-function TreeSVG({ stageIndex, growth, microSteps, live }) {
+function TreeSVG({ stageIndex, growth, microSteps, live, idp = "gt", size = 72 }) {
   const [leafLight, leafDark] = LEAF[stageIndex];
   // dimensioni in un viewBox 100x100, ancorate in basso al centro
   const cx = 50;
   const groundY = 92;
 
-  // crescita: dal seme (piccolo) all'albero pieno
+  // crescita: dal seme (piccolo) all'albero pieno — continua, mai indietro
   const minH = 10, maxH = 46;
   const trunkH = minH + (maxH - minH) * growth;
   const trunkTop = groundY - trunkH;
   const trunkW = 3 + 4 * growth;
 
   // raggio chioma cresce con lo stadio e con growth
-  const baseCrown = 8 + stageIndex * 3;
+  const baseCrown = 8 + stageIndex * 1.7;
   const crownR = baseCrown + 14 * growth;
-  const showCrown = stageIndex >= 1 || growth > 0.35;
+  const showCrown = stageIndex >= 1 || growth > 0.09;
 
   // posizione "cima" della chioma
   const crownCy = trunkTop - crownR * 0.35;
@@ -149,40 +206,40 @@ function TreeSVG({ stageIndex, growth, microSteps, live }) {
   }
 
   return (
-    <div className={"growth-svg-wrap" + (live ? " live" : "")}>
-      <svg viewBox="0 0 100 100" width="72" height="72" role="img" aria-label="Albero dei progressi">
+    <div className={"growth-svg-wrap" + (live ? " live" : "")} style={size === "100%" ? { width: "100%", height: "100%" } : undefined}>
+      <svg viewBox="0 0 100 100" width={size} height={size} role="img" aria-label="Albero dei progressi">
         <defs>
           {/* Chioma: luce dall'alto-sinistra, ombra profonda in basso-destra */}
-          <radialGradient id="gt-crown" cx="34%" cy="26%" r="85%">
+          <radialGradient id={`${idp}-crown`} cx="34%" cy="26%" r="85%">
             <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7" />
             <stop offset="14%" stopColor={leafLight} />
             <stop offset="55%" stopColor={leafDark} />
             <stop offset="86%" stopColor={leafDark} />
             <stop offset="100%" stopColor="#17402a" />
           </radialGradient>
-          <radialGradient id="gt-crown-back" cx="62%" cy="64%" r="78%">
+          <radialGradient id={`${idp}-crown-back`} cx="62%" cy="64%" r="78%">
             <stop offset="0%" stopColor={leafDark} />
             <stop offset="100%" stopColor="#143a26" />
           </radialGradient>
           {/* occlusione ambientale: bordo inferiore più scuro = volume */}
-          <radialGradient id="gt-ao" cx="50%" cy="40%" r="65%">
+          <radialGradient id={`${idp}-ao`} cx="50%" cy="40%" r="65%">
             <stop offset="0%" stopColor="#000000" stopOpacity="0" />
             <stop offset="78%" stopColor="#000000" stopOpacity="0" />
             <stop offset="100%" stopColor="#0c2c1c" stopOpacity="0.5" />
           </radialGradient>
           {/* Tronco cilindrico */}
-          <linearGradient id="gt-trunk" x1="0" y1="0" x2="1" y2="0">
+          <linearGradient id={`${idp}-trunk`} x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%" stopColor="#4e3319" />
             <stop offset="30%" stopColor="#a87747" />
             <stop offset="50%" stopColor="#9a6a3e" />
             <stop offset="52%" stopColor="#8a5c37" />
             <stop offset="100%" stopColor="#3f2813" />
           </linearGradient>
-          <radialGradient id="gt-soil" cx="50%" cy="26%" r="82%">
+          <radialGradient id={`${idp}-soil`} cx="50%" cy="26%" r="82%">
             <stop offset="0%" stopColor="#d8b078" />
             <stop offset="100%" stopColor="#7f6039" />
           </radialGradient>
-          <filter id="gt-soft" x="-20%" y="-20%" width="140%" height="140%">
+          <filter id={`${idp}-soft`} x="-20%" y="-20%" width="140%" height="140%">
             <feGaussianBlur stdDeviation="0.6" />
           </filter>
         </defs>
@@ -191,14 +248,14 @@ function TreeSVG({ stageIndex, growth, microSteps, live }) {
         <ellipse cx={cx + 3} cy={groundY + 3} rx={crownR * 0.9 + 4} ry="4.5" fill="#000" opacity="0.16" />
 
         {/* terreno */}
-        <ellipse cx={cx} cy={groundY + 2} rx="26" ry="5.5" fill="url(#gt-soil)" opacity="0.75" />
+        <ellipse cx={cx} cy={groundY + 2} rx="26" ry="5.5" fill={`url(#${idp}-soil)`} opacity="0.75" />
 
-        {/* seme (solo stadio 0 con poca crescita) */}
-        {stageIndex === 0 && growth < 0.35 ? (
+        {/* seme (solo inizio del primo stadio) */}
+        {stageIndex === 0 && growth < 0.06 ? (
           <g>
             <ellipse cx={cx} cy={groundY - 4} rx="6" ry="7.5" fill="#a9743f" />
             <ellipse cx={cx - 1.6} cy={groundY - 6} rx="1.8" ry="2.6" fill="#d8ad78" opacity="0.7" />
-            {growth > 0.12 && (
+            {growth > 0.02 && (
               <path d={`M${cx},${groundY - 10} q3,-6 7,-7 q-2,5 -7,7`} fill={leafDark} />
             )}
           </g>
@@ -210,7 +267,7 @@ function TreeSVG({ stageIndex, growth, microSteps, live }) {
                   Q${cx - trunkW / 2 - 1},${trunkTop + trunkH * 0.4} ${cx - trunkW * 0.35},${trunkTop}
                   L${cx + trunkW * 0.35},${trunkTop}
                   Q${cx + trunkW / 2 + 1},${trunkTop + trunkH * 0.4} ${cx + trunkW / 2},${groundY} Z`}
-              fill="url(#gt-trunk)"
+              fill={`url(#${idp}-trunk)`}
             />
             {/* riflesso di luce sul tronco (cilindricità) */}
             <path
@@ -218,8 +275,8 @@ function TreeSVG({ stageIndex, growth, microSteps, live }) {
                   L${cx - trunkW * 0.12},${trunkTop + 1}`}
               stroke="#c89058" strokeWidth={trunkW * 0.18} strokeLinecap="round" opacity="0.5"
             />
-            {/* rami (dallo stadio 2) */}
-            {stageIndex >= 2 && (
+            {/* rami (da metà percorso) */}
+            {stageIndex >= 3 && (
               <>
                 <path d={`M${cx},${trunkTop + trunkH * 0.35} q-9,-3 -13,-9`} stroke="#7a5433" strokeWidth="2" fill="none" strokeLinecap="round" />
                 <path d={`M${cx},${trunkTop + trunkH * 0.5} q9,-2 13,-8`} stroke="#7a5433" strokeWidth="2" fill="none" strokeLinecap="round" />
@@ -229,24 +286,24 @@ function TreeSVG({ stageIndex, growth, microSteps, live }) {
             {showCrown && (
               <g className="gt-crown-g">
                 {/* sfere posteriori (profondità, più scure) */}
-                <circle cx={cx + crownR * 0.42} cy={crownCy + crownR * 0.22} r={crownR * 0.68} fill="url(#gt-crown-back)" />
-                <circle cx={cx - crownR * 0.5} cy={crownCy + crownR * 0.15} r={crownR * 0.6} fill="url(#gt-crown-back)" />
+                <circle cx={cx + crownR * 0.42} cy={crownCy + crownR * 0.22} r={crownR * 0.68} fill={`url(#${idp}-crown-back)`} />
+                <circle cx={cx - crownR * 0.5} cy={crownCy + crownR * 0.15} r={crownR * 0.6} fill={`url(#${idp}-crown-back)`} />
                 {/* massa principale */}
-                <circle cx={cx - crownR * 0.14} cy={crownCy + crownR * 0.05} r={crownR} fill="url(#gt-crown)" />
+                <circle cx={cx - crownR * 0.14} cy={crownCy + crownR * 0.05} r={crownR} fill={`url(#${idp}-crown)`} />
                 {/* lobi laterali per un contorno "a grappolo" */}
-                <circle cx={cx + crownR * 0.52} cy={crownCy - crownR * 0.05} r={crownR * 0.55} fill="url(#gt-crown)" />
-                <circle cx={cx - crownR * 0.55} cy={crownCy - crownR * 0.02} r={crownR * 0.5} fill="url(#gt-crown)" />
-                <circle cx={cx + crownR * 0.05} cy={crownCy - crownR * 0.5} r={crownR * 0.55} fill="url(#gt-crown)" />
+                <circle cx={cx + crownR * 0.52} cy={crownCy - crownR * 0.05} r={crownR * 0.55} fill={`url(#${idp}-crown)`} />
+                <circle cx={cx - crownR * 0.55} cy={crownCy - crownR * 0.02} r={crownR * 0.5} fill={`url(#${idp}-crown)`} />
+                <circle cx={cx + crownR * 0.05} cy={crownCy - crownR * 0.5} r={crownR * 0.55} fill={`url(#${idp}-crown)`} />
                 {/* occlusione ambientale sui bordi (dà volume sferico) */}
-                <circle cx={cx - crownR * 0.14} cy={crownCy + crownR * 0.05} r={crownR} fill="url(#gt-ao)" />
+                <circle cx={cx - crownR * 0.14} cy={crownCy + crownR * 0.05} r={crownR} fill={`url(#${idp}-ao)`} />
                 {/* luce superiore (highlight volumetrico) */}
-                <circle cx={cx - crownR * 0.2} cy={crownCy - crownR * 0.42} r={crownR * 0.5} fill={leafLight} opacity="0.55" filter="url(#gt-soft)" />
-                <ellipse cx={cx - crownR * 0.45} cy={crownCy - crownR * 0.4} rx={crownR * 0.26} ry={crownR * 0.16} fill="#ffffff" opacity="0.45" filter="url(#gt-soft)" />
+                <circle cx={cx - crownR * 0.2} cy={crownCy - crownR * 0.42} r={crownR * 0.5} fill={leafLight} opacity="0.55" filter={`url(#${idp}-soft)`} />
+                <ellipse cx={cx - crownR * 0.45} cy={crownCy - crownR * 0.4} rx={crownR * 0.26} ry={crownR * 0.16} fill="#ffffff" opacity="0.45" filter={`url(#${idp}-soft)`} />
                 {/* piccolo riflesso speculare in alto a sinistra */}
-                <circle cx={cx - crownR * 0.5} cy={crownCy - crownR * 0.5} r={crownR * 0.1} fill="#ffffff" opacity="0.6" filter="url(#gt-soft)" />
+                <circle cx={cx - crownR * 0.5} cy={crownCy - crownR * 0.5} r={crownR * 0.1} fill="#ffffff" opacity="0.6" filter={`url(#${idp}-soft)`} />
 
                 {/* fiori sullo stadio massimo */}
-                {stageIndex >= 4 &&
+                {stageIndex >= STAGES.length - 1 &&
                   [0, 1, 2, 3, 4, 5].map((i) => {
                     const a = (i / 6) * Math.PI * 2;
                     return (
