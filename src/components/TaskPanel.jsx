@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../lib/supabase";
+import { useData } from "../state/DataContext.jsx";
 import { entrySeconds, fmtDuration, startOfWeek, dayKey } from "../lib/format.js";
 import { IconPlay, IconPlus } from "../lib/icons.jsx";
 import Sheet from "./Sheet.jsx";
@@ -8,13 +9,13 @@ import TaskForm, { PRIORITIES } from "./admin/TaskForm.jsx";
 import { askCoach, coachErrorMessage, COACH_NOT_CONFIGURED } from "../lib/coach.js";
 
 // ============================================================
-// Task nella Home (v31, ampliato in v32) — solo admin.
-// La Home è ora IL posto dei task: si creano, si modificano e si
-// avviano da qui (la scheda in Admin non esiste più).
-// · TaskQuickList: elenco task con + Nuovo, filtro Miei/Tutti,
-//   completati di recente; tocco sul task = modifica, ▶ = timer
-// · RunningTaskSteps: la checklist del task DENTRO il timer attivo
-// · CoachCard: consiglio del giorno + riepilogo settimanale AI
+// Task nella Home (v34 — "Task 2.0") — solo admin.
+// · Card SEMPRE esplose: passi con checkbox vere, diario con date,
+//   cliente/progetto come nell'app del tempo. Freccina per ripiegare
+//   il singolo task (scelta ricordata sul dispositivo).
+// · Checkbox del task = completa tutto (con "Annulla" di sicurezza):
+//   il task va nell'archivio e sboccia un fiore nel boschetto.
+// · Archivio consultabile con ricerca, per riguardare o riaprire.
 // ============================================================
 
 function isoToday() {
@@ -30,8 +31,8 @@ export function sortByUrgency(list) {
   });
 }
 
-// Carica task (tutti, anche completati) e lista admin. Se la tabella
-// non esiste ancora resta silenziosamente vuoto.
+// Carica task (tutti, anche completati) e lista admin; updateTask fa
+// aggiornamenti ottimistici (la UI risponde subito, il DB segue).
 export function useAdminTasks(enabled) {
   const [tasks, setTasks] = useState([]);
   const [admins, setAdmins] = useState([]);
@@ -50,33 +51,127 @@ export function useAdminTasks(enabled) {
 
   useEffect(() => { reload(); }, [reload]);
 
+  const updateTask = useCallback(async (id, fields) => {
+    setTasks((a) => a.map((t) => (t.id === id ? { ...t, ...fields } : t)));
+    const { error } = await supabase.from("admin_tasks").update(fields).eq("id", id);
+    if (error) reload();
+    return !error;
+  }, [reload]);
+
   const toggleStep = useCallback(async (task, stepId) => {
     const steps = (task.steps || []).map((s) => (s.id === stepId ? { ...s, done: !s.done } : s));
-    setTasks((a) => a.map((t) => (t.id === task.id ? { ...t, steps } : t)));
-    await supabase.from("admin_tasks").update({ steps }).eq("id", task.id);
-  }, []);
+    await updateTask(task.id, { steps });
+  }, [updateTask]);
 
-  return { tasks, admins, toggleStep, reload, loaded };
+  return { tasks, admins, toggleStep, updateTask, reload, loaded };
 }
 
-// Il pannello task della Home: elenco, creazione, modifica, avvio timer.
-export function TaskQuickList({ tasks, admins, userId, onStart, runningTaskId, taskSecs = {}, reload, projectById, loaded }) {
-  const [filter, setFilter] = useState("mine"); // "mine" | "all"
+// ---------- diario del task ----------
+function fmtDiaryDate(iso) {
+  return new Date(iso).toLocaleDateString("it-IT", { day: "numeric", month: "short" });
+}
+
+function DiaryBlock({ task, updateTask }) {
+  const [text, setText] = useState("");
   const [showAll, setShowAll] = useState(false);
-  const [showDone, setShowDone] = useState(false);
+  const diary = [...(task.diary || [])].sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+  const shown = showAll ? diary : diary.slice(0, 2);
+
+  function add() {
+    const v = text.trim();
+    if (!v) return;
+    setText("");
+    const entry = { id: crypto.randomUUID(), text: v.slice(0, 300), at: new Date().toISOString() };
+    updateTask(task.id, { diary: [...(task.diary || []), entry] });
+  }
+
+  return (
+    <div style={{ marginTop: 10, borderTop: "1px solid var(--line)", paddingTop: 8 }}>
+      {task.notes && (
+        <p className="muted" style={{ fontSize: 12, margin: "0 0 6px", fontStyle: "italic" }}>📌 {task.notes}</p>
+      )}
+      {shown.map((d) => (
+        <p key={d.id} style={{ fontSize: 12.5, margin: "0 0 4px", color: "var(--ink-soft)" }}>
+          <span className="muted">{fmtDiaryDate(d.at)}</span> — {d.text}
+        </p>
+      ))}
+      {diary.length > 2 && (
+        <button className="link-btn" style={{ fontSize: 11.5, marginBottom: 4 }} onClick={() => setShowAll((v) => !v)}>
+          {showAll ? "meno note" : `tutte le note (${diary.length})`}
+        </button>
+      )}
+      <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+        <input
+          className="field"
+          style={{ flex: 1, padding: "7px 10px", fontSize: 13 }}
+          placeholder="Aggiungi una nota al diario…"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+        />
+        {text.trim() && (
+          <button className="btn btn-soft btn-sm" onClick={add} aria-label="Salva nota">
+            <IconPlus style={{ width: 14, height: 14 }} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- il pannello task della Home ----------
+const COLLAPSE_KEY = "boschetto_task_collapsed";
+
+export function TaskQuickList({ tasks, admins, userId, onStart, runningTaskId, taskSecs = {}, reload, updateTask, toggleStep, loaded }) {
+  const { projectById, clientById, toast } = useData();
+  const [filter, setFilter] = useState("mine"); // "mine" | "all"
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
-  const today = isoToday();
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(COLLAPSE_KEY) || "[]")); } catch { return new Set(); }
+  });
+  const [justDone, setJustDone] = useState({}); // id -> snapshot (finestra "Annulla")
+  const timersRef = useRef({});
+
+  useEffect(() => () => { Object.values(timersRef.current).forEach(clearTimeout); }, []);
+
+  function toggleCollapsed(id) {
+    setCollapsed((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...n])); } catch { /* pieno */ }
+      return n;
+    });
+  }
+
+  // Spuntare il task lo completa TUTTO (passi inclusi). Resta visibile
+  // qualche secondo con "Annulla", poi vola nell'archivio.
+  async function completeTask(t) {
+    const snapshot = { steps: t.steps || [] };
+    setJustDone((m) => ({ ...m, [t.id]: snapshot }));
+    await updateTask(t.id, {
+      status: "done",
+      completed_at: new Date().toISOString(),
+      steps: (t.steps || []).map((s) => ({ ...s, done: true })),
+    });
+    toast("🌸 Task completato: è sbocciato un fiore nel boschetto", "ok");
+    timersRef.current[t.id] = setTimeout(() => {
+      setJustDone((m) => { const n = { ...m }; delete n[t.id]; return n; });
+    }, 6000);
+  }
+  async function undoComplete(t) {
+    clearTimeout(timersRef.current[t.id]);
+    const snap = justDone[t.id];
+    setJustDone((m) => { const n = { ...m }; delete n[t.id]; return n; });
+    await updateTask(t.id, { status: "open", completed_at: null, steps: snap?.steps || t.steps });
+  }
 
   const visible = tasks.filter((t) => filter === "all" || t.owner_id === userId);
-  const open = sortByUrgency(visible.filter((t) => t.status !== "done"));
-  const done = visible
-    .filter((t) => t.status === "done")
-    .sort((a, b) => (b.completed_at || "").localeCompare(a.completed_at || ""))
-    .slice(0, 5);
-  const shown = showAll ? open : open.slice(0, 4);
-  const hidden = open.length - shown.length;
+  const open = sortByUrgency(visible.filter((t) => t.status !== "done" || justDone[t.id]));
+  const archiveCount = visible.filter((t) => t.status === "done").length;
   const nameOf = (id) => (admins.find((a) => a.id === id)?.name || "—").split(" ")[0];
+  const today = isoToday();
 
   return (
     <>
@@ -96,100 +191,223 @@ export function TaskQuickList({ tasks, admins, userId, onStart, runningTaskId, t
       </div>
 
       {!loaded ? (
-        <Skeleton rows={2} height={58} style={{ marginTop: 0 }} />
+        <Skeleton rows={2} height={70} style={{ marginTop: 0 }} />
       ) : open.length === 0 ? (
         <div className="card" style={{ padding: 16 }}>
           <span className="muted" style={{ fontSize: 13 }}>
-            Nessun task in corso. Tocca "Nuovo" per crearne uno: scadenza, passi spuntabili e via.
+            Nessun task in corso. Tocca "Nuovo" per crearne uno: cliente, scadenza, passi spuntabili e via.
           </span>
         </div>
       ) : (
-        <div className="card">
-          {shown.map((t) => {
-            const steps = t.steps || [];
-            const doneN = steps.filter((s) => s.done).length;
-            const pct = steps.length ? Math.round((doneN / steps.length) * 100) : 0;
-            const late = t.due_date && t.due_date < today;
-            const secs = taskSecs[t.id] || 0;
-            const isRunning = runningTaskId === t.id;
-            const pr = PRIORITIES[t.priority] || PRIORITIES.media;
-            const proj = projectById ? projectById(t.project_id) : null;
-            return (
-              <div key={t.id} className="entry">
-                <span className="entry-dot" style={{ background: pr.color }} />
-                <div className="entry-main" onClick={() => setEditing(t)} style={{ cursor: "pointer" }}>
-                  <div className="entry-desc">{t.title}</div>
-                  <div className="entry-sub" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        open.map((t) => {
+          const isDone = !!justDone[t.id] && t.status === "done";
+          const isCollapsed = collapsed.has(t.id) && !isDone;
+          const steps = t.steps || [];
+          const doneN = steps.filter((s) => s.done).length;
+          const pct = t.status === "done" ? 100 : steps.length ? Math.round((doneN / steps.length) * 100) : 0;
+          const late = t.due_date && t.due_date < today && t.status !== "done";
+          const secs = taskSecs[t.id] || 0;
+          const isRunning = runningTaskId === t.id;
+          const pr = PRIORITIES[t.priority] || PRIORITIES.media;
+          const proj = projectById(t.project_id);
+          const client = t.client_id ? clientById(t.client_id) : proj?.client_id ? clientById(proj.client_id) : null;
+          return (
+            <div key={t.id} className="card" style={{ padding: "12px 14px", marginBottom: 10, opacity: isDone ? 0.75 : 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+                <input
+                  type="checkbox"
+                  checked={isDone}
+                  onChange={() => (isDone ? undoComplete(t) : completeTask(t))}
+                  aria-label={isDone ? "Annulla completamento" : "Completa il task"}
+                  style={{ width: 22, height: 22, accentColor: "var(--brand)", flexShrink: 0, cursor: "pointer" }}
+                />
+                <div
+                  style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+                  onClick={() => setEditing(t)}
+                >
+                  <div style={{ fontWeight: 700, fontSize: 14.5, textDecoration: isDone ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {t.title}
+                  </div>
+                </div>
+                {isRunning ? (
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ok)", flexShrink: 0 }}>in corso</span>
+                ) : (
+                  !isDone && (
+                    <button className="entry-play" onClick={() => onStart(t)} aria-label="Avvia timer sul task">
+                      <IconPlay />
+                    </button>
+                  )
+                )}
+                <button
+                  onClick={() => toggleCollapsed(t.id)}
+                  aria-label={isCollapsed ? "Espandi task" : "Ripiega task"}
+                  style={{ color: "var(--ink-faint)", padding: 4, fontSize: 12, flexShrink: 0 }}
+                >
+                  {isCollapsed ? "▾" : "▴"}
+                </button>
+              </div>
+
+              {isDone && (
+                <div style={{ marginLeft: 33, marginTop: 6, fontSize: 12.5 }}>
+                  🌸 Completato ·{" "}
+                  <button className="link-btn" style={{ fontSize: 12.5 }} onClick={() => undoComplete(t)}>Annulla</button>
+                </div>
+              )}
+
+              {!isDone && (
+                <>
+                  <div className="muted" style={{ fontSize: 12, marginTop: 5, marginLeft: 33, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ color: pr.color, background: pr.bg, fontWeight: 700, padding: "1px 8px", borderRadius: 999, fontSize: 11 }}>{pr.label}</span>
                     {filter === "all" && <span>👤 {nameOf(t.owner_id)}</span>}
-                    {steps.length > 0 && <span>{doneN}/{steps.length} passi</span>}
                     {t.due_date && (
                       <span style={late ? { color: "var(--stop)", fontWeight: 700 } : undefined}>
                         {late ? "⚠️ scaduto" : "📅"} {new Date(t.due_date + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" })}
                       </span>
                     )}
-                    {proj && <span>{proj.name}</span>}
+                    {(proj || client) && (
+                      <span>{proj ? proj.name : ""}{client ? (proj ? ` (${client.name})` : client.name) : ""}</span>
+                    )}
                     {secs > 0 && <span>⏱ {fmtDuration(secs)}</span>}
                   </div>
+
                   {steps.length > 0 && (
-                    <div className="growth-bar" style={{ marginTop: 6, height: 5 }}>
+                    <div className="growth-bar" style={{ marginTop: 8, marginLeft: 33, height: 5 }}>
                       <div className="growth-fill" style={{ width: `${pct}%` }} />
                     </div>
                   )}
-                </div>
-                {isRunning ? (
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ok)", flexShrink: 0 }}>in corso</span>
-                ) : (
-                  <button
-                    className="entry-play"
-                    onClick={(e) => { e.stopPropagation(); onStart(t); }}
-                    aria-label="Avvia timer sul task"
-                  >
-                    <IconPlay />
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+
+                  {!isCollapsed && (
+                    <div style={{ marginLeft: 33 }}>
+                      {steps.length > 0 && (
+                        <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 7 }}>
+                          {steps.map((s) => (
+                            <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, cursor: "pointer" }}>
+                              <input
+                                type="checkbox"
+                                checked={!!s.done}
+                                onChange={() => toggleStep(t, s.id)}
+                                style={{ width: 17, height: 17, accentColor: "var(--brand)", flexShrink: 0, cursor: "pointer" }}
+                              />
+                              <span style={{ textDecoration: s.done ? "line-through" : "none", opacity: s.done ? 0.55 : 1 }}>
+                                {s.text}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                      <DiaryBlock task={t} updateTask={updateTask} />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })
       )}
 
-      <div style={{ display: "flex", gap: 14, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
-        {hidden > 0 && (
-          <button className="link-btn" style={{ fontSize: 12 }} onClick={() => setShowAll(true)}>
-            mostra altri {hidden}
-          </button>
-        )}
-        {showAll && open.length > 4 && (
-          <button className="link-btn" style={{ fontSize: 12 }} onClick={() => setShowAll(false)}>
-            mostra meno
-          </button>
-        )}
-        {done.length > 0 && (
-          <button className="link-btn" style={{ fontSize: 12 }} onClick={() => setShowDone((v) => !v)}>
-            🌳 completati di recente {showDone ? "▴" : "▾"}
-          </button>
-        )}
-      </div>
-
-      {showDone && done.length > 0 && (
-        <div className="card" style={{ marginTop: 8 }}>
-          {done.map((t) => (
-            <div key={t.id} className="list-action" style={{ opacity: 0.7, cursor: "pointer" }} onClick={() => setEditing(t)}>
-              <span style={{ minWidth: 0 }}>
-                <span style={{ fontWeight: 600, display: "block", textDecoration: "line-through" }}>{t.title}</span>
-                <span className="muted" style={{ fontSize: 12 }}>
-                  🌳 {t.completed_at ? new Date(t.completed_at).toLocaleDateString("it-IT", { day: "numeric", month: "short" }) : ""}
-                  {filter === "all" ? ` · ${nameOf(t.owner_id)}` : ""}
-                </span>
-              </span>
-            </div>
-          ))}
-        </div>
+      {loaded && archiveCount > 0 && (
+        <button className="link-btn" style={{ fontSize: 12.5 }} onClick={() => setArchiveOpen(true)}>
+          🌸 Archivio dei completati ({archiveCount}) →
+        </button>
       )}
 
       {creating && <TaskForm admins={admins} onClose={() => setCreating(false)} onSaved={reload} />}
       {editing && <TaskForm task={editing} admins={admins} onClose={() => setEditing(null)} onSaved={reload} />}
+      <ArchiveSheet
+        open={archiveOpen}
+        onClose={() => setArchiveOpen(false)}
+        tasks={tasks}
+        admins={admins}
+        userId={userId}
+        onOpenTask={(t) => { setArchiveOpen(false); setEditing(t); }}
+      />
     </>
+  );
+}
+
+// ---------- archivio dei completati ----------
+function ArchiveSheet({ open, onClose, tasks, admins, userId, onOpenTask }) {
+  const { projectById, clientById } = useData();
+  const [q, setQ] = useState("");
+  const [who, setWho] = useState("mine");
+  if (!open) return null;
+
+  const norm = (s) => (s || "").toLowerCase();
+  const nameOf = (id) => (admins.find((a) => a.id === id)?.name || "—").split(" ")[0];
+  const done = tasks
+    .filter((t) => t.status === "done" && (who === "all" || t.owner_id === userId))
+    .filter((t) => {
+      if (!q.trim()) return true;
+      const proj = projectById(t.project_id);
+      const client = t.client_id ? clientById(t.client_id) : proj?.client_id ? clientById(proj.client_id) : null;
+      return norm(t.title + " " + (proj?.name || "") + " " + (client?.name || "")).includes(norm(q.trim()));
+    })
+    .sort((a, b) => (b.completed_at || "").localeCompare(a.completed_at || ""));
+
+  // raggruppo per mese di completamento
+  const groups = [];
+  const byMonth = {};
+  for (const t of done) {
+    const k = (t.completed_at || "").slice(0, 7);
+    if (!byMonth[k]) {
+      const label = t.completed_at
+        ? new Date(t.completed_at).toLocaleDateString("it-IT", { month: "long", year: "numeric" })
+        : "—";
+      byMonth[k] = { k, label, items: [] };
+      groups.push(byMonth[k]);
+    }
+    byMonth[k].items.push(t);
+  }
+
+  return (
+    <Sheet open={open} onClose={onClose} title="🌸 Archivio dei completati">
+      <p className="muted" style={{ fontSize: 12.5, marginBottom: 10 }}>
+        Ogni task qui dentro è un fiore nel prato del boschetto. Tocca un task per rivederlo o riaprirlo.
+      </p>
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <input
+          className="field"
+          style={{ flex: 1 }}
+          placeholder="Cerca per titolo, cliente o progetto…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+        {admins.length > 1 && (
+          <div className="segment" style={{ width: "auto", padding: 3 }}>
+            <button className={who === "mine" ? "active" : ""} style={{ padding: "5px 11px", fontSize: 12 }} onClick={() => setWho("mine")}>Miei</button>
+            <button className={who === "all" ? "active" : ""} style={{ padding: "5px 11px", fontSize: 12 }} onClick={() => setWho("all")}>Tutti</button>
+          </div>
+        )}
+      </div>
+
+      {done.length === 0 && (
+        <div className="empty"><div className="empty-emoji">🔍</div>{q ? "Nessun task trovato." : "Ancora nessun task completato."}</div>
+      )}
+
+      {groups.map((g) => (
+        <div key={g.k}>
+          <div className="section-label" style={{ textTransform: "capitalize" }}>{g.label}</div>
+          <div className="card" style={{ marginBottom: 12 }}>
+            {g.items.map((t) => {
+              const proj = projectById(t.project_id);
+              const client = t.client_id ? clientById(t.client_id) : proj?.client_id ? clientById(proj.client_id) : null;
+              return (
+                <div key={t.id} className="list-action" style={{ cursor: "pointer" }} onClick={() => onOpenTask(t)}>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ fontWeight: 600, display: "block" }}>{t.title}</span>
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      🌸 {t.completed_at ? new Date(t.completed_at).toLocaleDateString("it-IT", { day: "numeric", month: "short" }) : ""}
+                      {proj || client ? ` · ${proj ? proj.name : ""}${client ? (proj ? ` (${client.name})` : client.name) : ""}` : ""}
+                      {who === "all" ? ` · ${nameOf(t.owner_id)}` : ""}
+                    </span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </Sheet>
   );
 }
 

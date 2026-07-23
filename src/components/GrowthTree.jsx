@@ -250,7 +250,7 @@ function SeasonFlowers({ month, sunX, sunY, night }) {
 
 // ---------- LA SCENA ----------
 // (esportata anche da sola: usata dalla pagina di anteprima locale dev-scene.html)
-export function Scene({ hourNow, wx, month, growth, treesGrown, currentSpecies, stageIndex }) {
+export function Scene({ hourNow, wx, month, growth, treesGrown, currentSpecies, stageIndex, bloomCount = 0 }) {
   const { kind, sunrise: sr, sunset: ss } = wx;
   const gray = kind === "pioggia" || kind === "neve" ? 0.5 : kind === "nuvoloso" ? 0.22 : 0;
   let [top, midc, bot] = skyAt(hourNow, sr, ss);
@@ -281,6 +281,31 @@ export function Scene({ hourNow, wx, month, growth, treesGrown, currentSpecies, 
   if (kind === "pioggia") { const r = R(8); for (let i = 0; i < 40; i++) drops.push({ x: r() * 680, y: r() * 240, d: r() * 0.7 }); }
   const flakes = [];
   if (kind === "neve") { const r = R(9); for (let i = 0; i < 34; i++) flakes.push({ x: r() * 680, y: r() * 240, rr: 1.4 + r() * 1.6, d: r() * 4 }); }
+
+  // I fiori dei task completati (v34): ogni task chiuso sboccia nel prato.
+  // Fino a 40 fiori singoli; oltre, ogni 10 task in più il prato si
+  // infittisce con una "macchia fiorita" — così anche a quota 100+ la
+  // scena resta leggibile e sempre più rigogliosa, mai caotica.
+  const BLOOM_COLORS = ["#e86a8a", "#f2b81e", "#b455c8", "#5aa7dd", "#f08c1e"];
+  const blooms = [];
+  for (let i = 0; i < Math.min(bloomCount, 40); i++) {
+    const r = R(i * 37 + 11);
+    let bx = 20 + r() * 640;
+    if (bx > 290 && bx < 420) bx = bx < 355 ? bx - 150 : bx + 140; // il centro è dell'albero protagonista
+    blooms.push({ x: bx, y: 231 + r() * 19, c: BLOOM_COLORS[i % BLOOM_COLORS.length], s: 0.75 + r() * 0.5 });
+  }
+  const patches = [];
+  const nPatches = Math.min(8, Math.floor(Math.max(0, bloomCount - 40) / 10));
+  for (let p = 0; p < nPatches; p++) {
+    const r = R(p * 53 + 7);
+    let px = 40 + r() * 600;
+    if (px > 290 && px < 420) px = px < 355 ? px - 150 : px + 140;
+    const dots = [];
+    for (let k = 0; k < 9; k++) {
+      dots.push({ dx: (r() - 0.5) * 30, dy: (r() - 0.5) * 8, c: BLOOM_COLORS[Math.floor(r() * 5)] });
+    }
+    patches.push({ x: px, y: 236 + r() * 12, dots });
+  }
 
   // il bosco: posizioni fisse, alberi unici per seed/specie
   const slots = [
@@ -345,6 +370,25 @@ export function Scene({ hourNow, wx, month, growth, treesGrown, currentSpecies, 
 
       <path d="M0,224 Q220,198 460,216 T680,208 V260 H0 Z" fill="url(#bsc-h3)" />
 
+      {/* Il prato dei task completati: un fiore per ogni task chiuso */}
+      {patches.map((p, i) => (
+        <g key={"pt" + i} transform={`translate(${p.x.toFixed(0)},${p.y.toFixed(0)})`}>
+          {p.dots.map((d, k) => (
+            <circle key={k} cx={d.dx.toFixed(1)} cy={d.dy.toFixed(1)} r="1.7" fill={d.c} opacity="0.9" />
+          ))}
+        </g>
+      ))}
+      {blooms.map((b, i) => (
+        <g key={"bl" + i} transform={`translate(${b.x.toFixed(0)},${b.y.toFixed(0)}) scale(${b.s.toFixed(2)})`}>
+          <path d="M0,0 v-5" stroke="#3c7a3f" strokeWidth="1" />
+          <circle cx="-1.8" cy="-6" r="1.5" fill={b.c} />
+          <circle cx="1.8" cy="-6" r="1.5" fill={b.c} />
+          <circle cx="0" cy="-7.8" r="1.5" fill={b.c} />
+          <circle cx="0" cy="-4.2" r="1.5" fill={b.c} />
+          <circle cx="0" cy="-6" r="1.1" fill="#fff2c0" />
+        </g>
+      ))}
+
       {/* L'albero in crescita, protagonista in primo piano */}
       {growth < 0.05 ? (
         <g>
@@ -381,7 +425,7 @@ export function Scene({ hourNow, wx, month, growth, treesGrown, currentSpecies, 
 // scorciatoia per non ripetere mix con guard
 function mix2(a, b, t) { return t > 0 ? mix(a, b, t) : a; }
 
-export default function GrowthTree({ userId }) {
+export default function GrowthTree({ userId, bloomCount = 0 }) {
   const { runningEntries } = useData();
   const [baseSecs, setBaseSecs] = useState(null);
   const [, setTick] = useState(0);
@@ -440,6 +484,7 @@ export default function GrowthTree({ userId }) {
         <Scene
           hourNow={hourNow} wx={wx} month={month} growth={growth}
           treesGrown={treesGrown} currentSpecies={currentSpecies} stageIndex={stageIndex}
+          bloomCount={bloomCount}
         />
       </div>
 

@@ -4,7 +4,7 @@ import { useAuth } from "../state/AuthContext.jsx";
 import { useData } from "../state/DataContext.jsx";
 import { MiniBars, ProgressRing } from "../components/Charts.jsx";
 import Skeleton from "../components/Skeleton.jsx";
-import { fmtDuration, startOfWeek, entrySeconds } from "../lib/format.js";
+import { fmtDuration, startOfWeek, entrySeconds, dayKey } from "../lib/format.js";
 import {
   monthComparison, personalRecords, speedTrends, byMonth,
   monthLabel, fmtPct,
@@ -24,21 +24,29 @@ function DeltaPill({ pct, invert = false }) {
 }
 
 export default function PersonalStats() {
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const { projectById } = useData();
   const [entries, setEntries] = useState(null);
+  const [doneTasks, setDoneTasks] = useState(null); // task completati (solo admin)
 
   const load = useCallback(async () => {
     const since = new Date();
     since.setDate(since.getDate() - 365);
-    const { data } = await supabase
-      .from("time_entries")
-      .select("*")
-      .eq("user_id", user.id)
-      .not("stopped_at", "is", null)
-      .gte("started_at", since.toISOString());
-    setEntries(data || []);
-  }, [user]);
+    const [entRes, taskRes] = await Promise.all([
+      supabase
+        .from("time_entries")
+        .select("*")
+        .eq("user_id", user.id)
+        .not("stopped_at", "is", null)
+        .gte("started_at", since.toISOString()),
+      // i task esistono solo per gli admin: per gli altri la sezione non appare
+      isAdmin
+        ? supabase.from("admin_tasks").select("completed_at").eq("owner_id", user.id).eq("status", "done")
+        : Promise.resolve({ data: null }),
+    ]);
+    setEntries(entRes.data || []);
+    setDoneTasks(isAdmin ? (taskRes.data || []).filter((t) => t.completed_at) : null);
+  }, [user, isAdmin]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -90,6 +98,45 @@ export default function PersonalStats() {
   const slower = speed.filter((s) => s.pct >= 15).slice(0, 2);
 
   const monthName = new Date().toLocaleDateString("it-IT", { month: "long" });
+
+  // ---- Statistiche dei task completati (v34, solo admin) ----
+  let taskStats = null;
+  if (doneTasks && doneTasks.length > 0) {
+    const todayK = dayKey(new Date());
+    const wStart = startOfWeek();
+    const mStart = new Date();
+    mStart.setDate(1); mStart.setHours(0, 0, 0, 0);
+    const byDayCount = {};
+    let tToday = 0, tWeek = 0, tMonth = 0;
+    for (const t of doneTasks) {
+      const d = new Date(t.completed_at);
+      const k = dayKey(d);
+      byDayCount[k] = (byDayCount[k] || 0) + 1;
+      if (k === todayK) tToday++;
+      if (d >= wStart) tWeek++;
+      if (d >= mStart) tMonth++;
+    }
+    let best = null;
+    for (const [k, n] of Object.entries(byDayCount)) if (!best || n > best.n) best = { k, n };
+    // striscia: giorni di fila con almeno un task chiuso (oggi può essere in corso)
+    let streak = 0;
+    const cur = new Date();
+    if (!byDayCount[dayKey(cur)]) cur.setDate(cur.getDate() - 1);
+    while (byDayCount[dayKey(cur)]) { streak++; cur.setDate(cur.getDate() - 1); }
+    const weekBars = [];
+    for (let i = 7; i >= 0; i--) {
+      const ws = startOfWeek(new Date(Date.now() - i * 7 * 86400000));
+      const we = new Date(ws.getTime() + 7 * 86400000);
+      let n = 0;
+      for (const t of doneTasks) { const d = new Date(t.completed_at); if (d >= ws && d < we) n++; }
+      weekBars.push({
+        label: ws.toLocaleDateString("it-IT", { day: "numeric", month: "numeric" }),
+        value: n,
+        highlight: i === 0,
+      });
+    }
+    taskStats = { tToday, tWeek, tMonth, total: doneTasks.length, best, streak, weekBars };
+  }
 
   return (
     <div className="screen">
@@ -243,6 +290,51 @@ export default function PersonalStats() {
                   </span>
                 </span>
                 <span className="record-val">{fmtDuration(rec.bestDay.secs)}</span>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* I tuoi task (v34, solo admin) */}
+      {taskStats && (
+        <>
+          <div className="section-label">I tuoi task 🎯</div>
+          <div className="stat-grid">
+            <div className="stat"><div className="stat-value">{taskStats.tToday}</div><div className="stat-label">Completati oggi</div></div>
+            <div className="stat"><div className="stat-value">{taskStats.tWeek}</div><div className="stat-label">Questa settimana</div></div>
+            <div className="stat"><div className="stat-value">{taskStats.tMonth}</div><div className="stat-label">Questo mese</div></div>
+            <div className="stat"><div className="stat-value">🌸 {taskStats.total}</div><div className="stat-label">Da sempre</div></div>
+          </div>
+          {taskStats.weekBars.some((b) => b.value > 0) && (
+            <div className="card" style={{ padding: "16px 12px 10px", marginTop: 4 }}>
+              <MiniBars data={taskStats.weekBars} height={90} color="var(--brand)" formatValue={(v) => String(v)} />
+              <p className="muted center" style={{ fontSize: 11, margin: "6px 0 4px" }}>task completati · ultime 8 settimane</p>
+            </div>
+          )}
+          <div className="card" style={{ marginTop: 10 }}>
+            {taskStats.best && (
+              <div className="record-row">
+                <span className="record-emoji">🏆</span>
+                <span className="record-main">
+                  <span className="record-title">Giorno con più task completati</span>
+                  <span className="record-sub" style={{ display: "block" }}>
+                    {new Date(taskStats.best.k + "T12:00:00").toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" })}
+                  </span>
+                </span>
+                <span className="record-val">{taskStats.best.n}</span>
+              </div>
+            )}
+            {taskStats.streak >= 2 && (
+              <div className="record-row">
+                <span className="record-emoji">🔥</span>
+                <span className="record-main">
+                  <span className="record-title">Striscia attuale</span>
+                  <span className="record-sub" style={{ display: "block" }}>
+                    giorni di fila con almeno un task chiuso
+                  </span>
+                </span>
+                <span className="record-val">{taskStats.streak}</span>
               </div>
             )}
           </div>

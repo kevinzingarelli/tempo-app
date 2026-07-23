@@ -18,7 +18,7 @@ export const PRIORITIES = {
 
 export default function TaskForm({ task, admins, onClose, onSaved }) {
   const { user } = useAuth();
-  const { toast, activeProjects } = useData();
+  const { toast, activeProjects, clients } = useData();
   const editing = !!task;
   const [title, setTitle] = useState(task?.title || "");
   const [notes, setNotes] = useState(task?.notes || "");
@@ -26,6 +26,10 @@ export default function TaskForm({ task, admins, onClose, onSaved }) {
   const [priority, setPriority] = useState(task?.priority || "media");
   const [dueDate, setDueDate] = useState(task?.due_date || "");
   const [projectId, setProjectId] = useState(task?.project_id || "");
+  // cliente: esplicito sul task, o dedotto dal progetto già collegato
+  const [clientId, setClientId] = useState(
+    task?.client_id || activeProjects.find((p) => p.id === task?.project_id)?.client_id || ""
+  );
   const [steps, setSteps] = useState(task?.steps || []);
   const [newStep, setNewStep] = useState("");
   const [busy, setBusy] = useState(false);
@@ -73,6 +77,7 @@ export default function TaskForm({ task, admins, onClose, onSaved }) {
       owner_id: ownerId,
       priority,
       due_date: dueDate || null,
+      client_id: clientId || null,
       project_id: projectId || null,
       steps,
     };
@@ -109,6 +114,25 @@ export default function TaskForm({ task, admins, onClose, onSaved }) {
         .eq("id", task.id);
       if (error) throw error;
       toast("🌳 Task completato!", "ok");
+      onSaved();
+      onClose();
+    } catch (e) {
+      toast("Operazione non riuscita: " + (e?.message || "riprova"), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // dall'archivio: il task torna tra quelli in corso (i passi restano spuntati)
+  async function reopen() {
+    setBusy(true);
+    try {
+      const { error } = await supabase
+        .from("admin_tasks")
+        .update({ status: "open", completed_at: null })
+        .eq("id", task.id);
+      if (error) throw error;
+      toast("Task riaperto: lo ritrovi tra quelli in corso.", "ok");
       onSaved();
       onClose();
     } catch (e) {
@@ -157,12 +181,44 @@ export default function TaskForm({ task, admins, onClose, onSaved }) {
       </div>
 
       <div className="sheet-row">
-        <label className="field-label">Progetto collegato (facoltativo)</label>
-        <select className="field" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-          <option value="">Nessun progetto</option>
-          {activeProjects.map((p) => (
-            <option key={p.id} value={p.id}>{p.name}</option>
+        <label className="field-label">Cliente (facoltativo)</label>
+        <select
+          className="field"
+          value={clientId}
+          onChange={(e) => {
+            const cid = e.target.value;
+            setClientId(cid);
+            // se il progetto scelto appartiene a un altro cliente, lo sgancio
+            const p = activeProjects.find((x) => x.id === projectId);
+            if (cid && p && p.client_id !== cid) setProjectId("");
+          }}
+        >
+          <option value="">Nessun cliente</option>
+          {clients.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
           ))}
+        </select>
+      </div>
+
+      <div className="sheet-row">
+        <label className="field-label">Progetto collegato (facoltativo)</label>
+        <select
+          className="field"
+          value={projectId}
+          onChange={(e) => {
+            const pid = e.target.value;
+            setProjectId(pid);
+            // scegliendo il progetto, il cliente si compila da solo
+            const p = activeProjects.find((x) => x.id === pid);
+            if (p?.client_id) setClientId(p.client_id);
+          }}
+        >
+          <option value="">Nessun progetto</option>
+          {activeProjects
+            .filter((p) => !clientId || p.client_id === clientId)
+            .map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
         </select>
         <p className="muted" style={{ fontSize: 12, marginTop: 5 }}>
           Con un progetto collegato, dalla Home il task parte con un tocco e le ore finiscono nel posto giusto.
@@ -231,6 +287,11 @@ export default function TaskForm({ task, admins, onClose, onSaved }) {
       {editing && task.status !== "done" && (
         <button className="btn btn-soft btn-block" style={{ marginTop: 10 }} onClick={markDone} disabled={busy}>
           <IconCheck style={{ width: 16, height: 16 }} /> Segna come completato
+        </button>
+      )}
+      {editing && task.status === "done" && (
+        <button className="btn btn-soft btn-block" style={{ marginTop: 10 }} onClick={reopen} disabled={busy}>
+          Riapri il task (torna tra quelli in corso)
         </button>
       )}
       {editing && (

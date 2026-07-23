@@ -2,10 +2,26 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "33";
+export const CURRENT_VERSION = "34";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "34",
+    date: "2026-07-23",
+    time: "19:00",
+    title: "Task 2.0: checkbox, diario e fiori",
+    items: [],
+    adminItems: [
+      "Checkbox vere: spunti il task e lo completi (con 'Annulla' di sicurezza), spunti i singoli passi direttamente dalla lista",
+      "Card sempre esplose: passi e diario sotto gli occhi, freccina per ripiegare il singolo task",
+      "Cliente sul task + progetto filtrato per cliente, esattamente come nel timer",
+      "Diario con date per i task lunghi: 'aggiungi una nota' e ritrovi il filo anche dopo settimane",
+      "🌸 Ogni task completato fa sbocciare un fiore nel prato del boschetto — e oltre i 40 il prato si infittisce a macchie, sempre più rigoglioso",
+      "Archivio dei completati: consultabile, con ricerca per titolo/cliente/progetto, e possibilità di riaprire un task",
+      "In 'Per te': task completati oggi/settimana/mese/da sempre, grafico delle ultime 8 settimane, giorno record e striscia 🔥",
+    ],
+  },
   {
     version: "33",
     date: "2026-07-23",

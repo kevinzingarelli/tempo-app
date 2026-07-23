@@ -22,6 +22,7 @@
     <div class="row" id="wxr"></div>
     <div class="row"><label>Crescita <input type="range" id="g" min="0" max="100" value="55" /><span id="gv">55%</span></label></div>
     <div class="row"><label>Alberi completati <input type="range" id="n" min="0" max="12" value="5" /><span id="nv">5</span></label></div>
+    <div class="row"><label>Fiori (task completati) <input type="range" id="b" min="0" max="130" value="14" /><span id="bv">14</span></label></div>
     <div class="row" id="mor"></div>
   </div>
   <script type="module">
@@ -35,7 +36,7 @@
       { name: "melo", fruit: "apple" }, { name: "limone", fruit: "lemon" },
       { name: "susino", fruit: "plum" }, { name: "pesco", fruit: "peach" },
     ];
-    const state = { h: 17.5, kind: "sereno", g: 0.55, n: 5, month: 6 };
+    const state = { h: 17.5, kind: "sereno", g: 0.55, n: 5, month: 6, b: 14 };
     const root = createRoot(document.getElementById("frame"));
     function draw() {
       const stage = Math.min(8, Math.floor(state.g * 40 / 5));
@@ -47,12 +48,14 @@
         treesGrown: state.n,
         currentSpecies: SPECIES[state.n % 6],
         stageIndex: stage,
+        bloomCount: state.b,
       }));
     }
     const $ = (id) => document.getElementById(id);
     $("h").oninput = (e) => { state.h = +e.target.value; $("hv").textContent = String(Math.floor(state.h)).padStart(2, "0") + ":" + String(Math.round(state.h % 1 * 60)).padStart(2, "0"); draw(); };
     $("g").oninput = (e) => { state.g = +e.target.value / 100; $("gv").textContent = e.target.value + "%"; draw(); };
     $("n").oninput = (e) => { state.n = +e.target.value; $("nv").textContent = e.target.value; draw(); };
+    $("b").oninput = (e) => { state.b = +e.target.value; $("bv").textContent = e.target.value; draw(); };
     for (const k of ["sereno", "nuvoloso", "pioggia", "neve"]) {
       const b = document.createElement("button");
       b.textContent = k; b.id = "wx-" + k;

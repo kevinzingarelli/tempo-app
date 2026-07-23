@@ -122,7 +122,7 @@ export default function Timer() {
 
   // Task admin nella Home (v31/v32): elenco con creazione e modifica,
   // checklist nel timer attivo e ore accumulate per task.
-  const { tasks: adminTasks, admins: taskAdmins, toggleStep: toggleTaskStep, reload: reloadTasks, loaded: tasksLoaded } = useAdminTasks(isAdmin);
+  const { tasks: adminTasks, admins: taskAdmins, toggleStep: toggleTaskStep, updateTask: updateAdminTask, reload: reloadTasks, loaded: tasksLoaded } = useAdminTasks(isAdmin);
   const taskSecs = {};
   if (isAdmin) {
     for (const e of entries) {
@@ -626,7 +626,12 @@ export default function Timer() {
       )}
 
       <TeamNote />
-      {showTree && <GrowthTree userId={user?.id} />}
+      {showTree && (
+        <GrowthTree
+          userId={user?.id}
+          bloomCount={isAdmin ? adminTasks.filter((t) => t.owner_id === user?.id && t.status === "done").length : 0}
+        />
+      )}
 
       {(() => {
         const now = new Date();
@@ -647,6 +652,31 @@ export default function Timer() {
           <IconPlus style={{ width: 17, height: 17 }} /> Aggiungi manualmente
         </button>
       </div>
+
+      {/* Task e coach (v34, solo admin): il piano viene prima delle scorciatoie */}
+      {isAdmin && (
+        <>
+          <TaskQuickList
+            tasks={adminTasks}
+            admins={taskAdmins}
+            userId={user?.id}
+            onStart={handleTaskClick}
+            runningTaskId={runningEntry?.task_id || null}
+            taskSecs={taskSecs}
+            reload={reloadTasks}
+            updateTask={updateAdminTask}
+            toggleStep={toggleTaskStep}
+            loaded={tasksLoaded}
+          />
+          <CoachCard
+            tasks={adminTasks}
+            entries={entries}
+            profile={profile}
+            projectById={projectById}
+            userId={user?.id}
+          />
+        </>
+      )}
 
       {/* Riepilogo di fine giornata */}
       {todaySecs > 0 && (
@@ -721,30 +751,6 @@ export default function Timer() {
               );
             })}
           </div>
-        </>
-      )}
-
-      {/* Task e coach (v31/v32, solo admin) */}
-      {isAdmin && (
-        <>
-          <TaskQuickList
-            tasks={adminTasks}
-            admins={taskAdmins}
-            userId={user?.id}
-            onStart={handleTaskClick}
-            runningTaskId={runningEntry?.task_id || null}
-            taskSecs={taskSecs}
-            reload={reloadTasks}
-            projectById={projectById}
-            loaded={tasksLoaded}
-          />
-          <CoachCard
-            tasks={adminTasks}
-            entries={entries}
-            profile={profile}
-            projectById={projectById}
-            userId={user?.id}
-          />
         </>
       )}
 

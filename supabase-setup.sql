@@ -637,3 +637,15 @@ alter table public.admin_tasks
 
 alter table public.time_entries
   add column if not exists task_id uuid references public.admin_tasks(id) on delete set null;
+
+-- ============================================================
+--  v34 — Task 2.0
+--  · admin_tasks.client_id: cliente del task (anche senza progetto)
+--  · admin_tasks.diary: diario con data per i task lunghi
+--  Solo colonne nuove, nullabili/con default: zero rischi sui dati.
+-- ============================================================
+alter table public.admin_tasks
+  add column if not exists client_id uuid references public.clients(id) on delete set null;
+
+alter table public.admin_tasks
+  add column if not exists diary jsonb not null default '[]'::jsonb;
