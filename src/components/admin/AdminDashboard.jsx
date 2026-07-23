@@ -594,9 +594,73 @@ export default function AdminDashboard() {
         );
       })()}
 
+      <AppHealth />
+
       <p className="muted center" style={{ fontSize: 11.5, marginTop: 18 }}>
         Il dettaglio voce per voce e l'export CSV sono nella scheda “Report”.
       </p>
+    </div>
+  );
+}
+
+// Salute dell'app (v30): errori JavaScript registrati dagli utenti negli
+// ultimi 7 giorni, raggruppati per messaggio. Se è tutto verde, nessuno
+// sta vedendo schermi bianchi o crash silenziosi.
+function AppHealth() {
+  const [errors, setErrors] = useState(null);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+      const { data, error } = await supabase
+        .from("client_errors")
+        .select("message, created_at")
+        .gte("created_at", weekAgo)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) { setErrors([]); return; } // tabella assente o non leggibile: non bloccare la dashboard
+      setErrors(data || []);
+    })();
+  }, []);
+
+  if (errors === null) return null;
+
+  const groups = {};
+  for (const e of errors) {
+    if (!groups[e.message]) groups[e.message] = { message: e.message, count: 0, last: e.created_at };
+    groups[e.message].count += 1;
+  }
+  const rows = Object.values(groups).sort((a, b) => b.count - a.count).slice(0, 8);
+  const healthy = rows.length === 0;
+
+  return (
+    <div className="card" style={{ padding: 14, marginTop: 14, borderLeft: `3px solid ${healthy ? "var(--ok)" : "var(--warn)"}` }}>
+      <div
+        className="row-between"
+        style={{ cursor: healthy ? "default" : "pointer" }}
+        onClick={() => !healthy && setOpen((v) => !v)}
+      >
+        <div style={{ fontWeight: 700, fontSize: 14 }}>
+          {healthy ? "💚 Salute dell'app: nessun errore negli ultimi 7 giorni" : `⚠️ Salute dell'app: ${errors.length} ${errors.length === 1 ? "errore" : "errori"} negli ultimi 7 giorni`}
+        </div>
+        {!healthy && <span className="muted" style={{ fontSize: 12 }}>{open ? "chiudi" : "dettagli"}</span>}
+      </div>
+      {open && !healthy && (
+        <div style={{ marginTop: 10 }}>
+          {rows.map((r) => (
+            <div key={r.message} className="row-between" style={{ padding: "6px 0", borderTop: "1px solid var(--line)", gap: 10 }}>
+              <span style={{ fontSize: 12.5, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                {r.message}
+              </span>
+              <span className="muted" style={{ fontSize: 12, flexShrink: 0 }}>×{r.count}</span>
+            </div>
+          ))}
+          <p className="muted" style={{ fontSize: 11.5, marginTop: 8, marginBottom: 0 }}>
+            Copia il messaggio d'errore e passalo a chi sviluppa: contiene la pista giusta.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

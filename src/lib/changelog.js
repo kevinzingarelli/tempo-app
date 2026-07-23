@@ -2,10 +2,22 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "29";
+export const CURRENT_VERSION = "30";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "30",
+    date: "2026-07-22",
+    time: "23:58",
+    title: "Task con avanzamento e salute dell'app",
+    items: [],
+    adminItems: [
+      "Nuova scheda Task 🎯 in Admin: task con scadenza, priorità e passi spuntabili — la barra avanza a ogni passo, perfetta per i lavori lunghi",
+      "Potete assegnarvi i task a vicenda; il riepilogo mostra in corso, completati della settimana e in ritardo",
+      "In Dashboard la card 'Salute dell'app' mostra gli errori tecnici capitati agli utenti negli ultimi 7 giorni: se qualcuno vede uno schermo bianco, ora lo sapete subito",
+    ],
+  },
   {
     version: "29",
     date: "2026-07-22",

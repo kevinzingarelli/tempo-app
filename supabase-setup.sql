@@ -574,3 +574,52 @@ create policy opportunities_admin on public.opportunities
 --     update public.profiles set role = 'admin'
 --     where id = (select id from auth.users where email = 'TUA-EMAIL@esempio.it');
 -- ============================================================
+
+-- ============================================================
+--  TASK ADMIN GAMIFICATI (v30) — solo Kevin e Asia.
+--  Task con scadenza, priorità, passi di avanzamento (checklist) e
+--  assegnazione reciproca tra admin. Non distruttivo: crea solo se manca.
+-- ============================================================
+create table if not exists public.admin_tasks (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  notes text,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  created_by uuid references auth.users(id),
+  due_date date,
+  priority text not null default 'media',   -- bassa | media | alta
+  steps jsonb not null default '[]'::jsonb, -- [{id, text, done}]
+  status text not null default 'open',      -- open | done
+  completed_at timestamptz,
+  created_at timestamptz default now()
+);
+alter table public.admin_tasks enable row level security;
+
+drop policy if exists admin_tasks_all on public.admin_tasks;
+create policy admin_tasks_all on public.admin_tasks
+  for all using (public.is_admin()) with check (public.is_admin());
+
+-- ============================================================
+--  ERRORI CLIENT (v30) — l'app registra gli errori JavaScript che
+--  capitano agli utenti, così gli admin li vedono in Dashboard invece
+--  di scoprirli per sentito dire. Scrittura: ogni utente loggato.
+--  Lettura: solo admin.
+-- ============================================================
+create table if not exists public.client_errors (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  message text,
+  stack text,
+  url text,
+  user_agent text,
+  created_at timestamptz default now()
+);
+alter table public.client_errors enable row level security;
+
+drop policy if exists client_errors_insert on public.client_errors;
+create policy client_errors_insert on public.client_errors
+  for insert with check (auth.uid() is not null);
+
+drop policy if exists client_errors_select on public.client_errors;
+create policy client_errors_select on public.client_errors
+  for select using (public.is_admin());

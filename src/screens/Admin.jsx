@@ -6,6 +6,7 @@ import ReportExplorer from "../components/admin/ReportExplorer.jsx";
 import Profitability from "../components/admin/Profitability.jsx";
 import Opportunities from "../components/admin/Opportunities.jsx";
 import TaskStats from "../components/admin/TaskStats.jsx";
+import TaskBoard from "../components/admin/TaskBoard.jsx";
 import ProjectManager from "../components/admin/ProjectManager.jsx";
 import ClientManager from "../components/admin/ClientManager.jsx";
 import UserManager from "../components/admin/UserManager.jsx";
@@ -13,6 +14,7 @@ import { IconLogout } from "../lib/icons.jsx";
 
 const TABS = [
   { id: "dash", label: "Dashboard" },
+  { id: "todo", label: "Task 🎯" },
   { id: "report", label: "Report" },
   { id: "explore", label: "Esplora" },
   { id: "profit", label: "Redditività" },
@@ -63,6 +65,7 @@ export default function Admin() {
       </div>
 
       {section === "dash" && <AdminDashboard />}
+      {section === "todo" && <TaskBoard />}
       {section === "report" && <AdminReport />}
       {section === "explore" && <ReportExplorer />}
       {section === "profit" && <Profitability />}

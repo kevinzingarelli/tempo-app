@@ -11,6 +11,7 @@ import ConfigNeeded from "./screens/ConfigNeeded.jsx";
 import BottomNav from "./components/BottomNav.jsx";
 import ClosureAnnouncement from "./components/ClosureAnnouncement.jsx";
 import UpdateBanner from "./components/UpdateBanner.jsx";
+import ErrorReporter from "./components/ErrorReporter.jsx";
 import TabTimer from "./components/TabTimer.jsx";
 import { IconClock } from "./lib/icons.jsx";
 import { entrySeconds } from "./lib/format.js";
@@ -91,6 +92,7 @@ function MainApp() {
         <ClosureAnnouncement />
         <UpdateBanner />
         <TabTimer />
+        <ErrorReporter />
         <OfflinePill />
         <LongTimerPill tab={tab} setTab={setTab} />
         {tab === "timer" && <Timer />}
