@@ -2,10 +2,29 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "30";
+export const CURRENT_VERSION = "31";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "31",
+    date: "2026-07-23",
+    time: "12:30",
+    title: "Task nel Timer, coach AI e app più scattante",
+    items: [
+      "L'app si apre più in fretta: i dati compaiono subito e si aggiornano da soli in sottofondo",
+      "Durante i caricamenti vedi un'anteprima animata al posto della rotellina",
+    ],
+    adminItems: [
+      "I task vivono anche nella schermata Timer: tocchi un task e parte il timer col suo nome",
+      "Ogni task può avere un progetto collegato: l'avvio è immediato e le ore finiscono nel posto giusto",
+      "Mentre il timer di un task corre, la sua checklist è lì con te: spunti i passi senza cambiare schermata",
+      "Ogni task mostra le ore realmente lavorate (⏱), sia nel Timer sia in Admin → Task",
+      "🧠 Arriva il coach AI: consiglio del giorno nel Timer, propone i passi di un task appena lo crei e scrive il riepilogo della settimana (richiede una configurazione una tantum su Supabase)",
+      "Creando un progetto al volo dalla scelta progetto ora indichi anche il cliente — o ne crei uno nuovo lì per lì",
+      "Le voci anomale in Dashboard si toccano: vedi subito quali sono, di chi, e quanto si scostano dal solito",
+    ],
+  },
   {
     version: "30",
     date: "2026-07-22",

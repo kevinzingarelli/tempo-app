@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../state/AuthContext.jsx";
 import { useData } from "../state/DataContext.jsx";
 import { MiniBars, ProgressRing } from "../components/Charts.jsx";
+import Skeleton from "../components/Skeleton.jsx";
 import { fmtDuration, startOfWeek, entrySeconds } from "../lib/format.js";
 import {
   monthComparison, personalRecords, speedTrends, byMonth,
@@ -44,7 +45,7 @@ export default function PersonalStats() {
   if (entries === null) {
     return (
       <div className="screen">
-        <div className="center" style={{ marginTop: 60 }}><span className="spinner" /></div>
+        <Skeleton rows={4} height={90} />
       </div>
     );
   }

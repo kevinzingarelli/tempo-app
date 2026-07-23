@@ -77,7 +77,11 @@ export function DataProvider({ children }) {
     const since = new Date();
     since.setDate(since.getDate() - HISTORY_DAYS);
 
-    const [proj, ent, fav] = await Promise.all([
+    // Tutto in parallelo (v31): prima i clienti arrivavano con una seconda
+    // richiesta in coda, ora viaggiano insieme al resto — un giro di rete
+    // in meno a ogni apertura. I NOMI dei clienti servono a tutti; i dati
+    // economici (project_finance) restano riservati agli admin.
+    const [proj, ent, fav, cli] = await Promise.all([
       supabase.from("projects").select("*").order("name"),
       supabase
         .from("time_entries")
@@ -86,16 +90,12 @@ export function DataProvider({ children }) {
         .gte("started_at", since.toISOString())
         .order("started_at", { ascending: false }),
       supabase.from("favorites").select("*").eq("user_id", user.id).order("created_at"),
+      supabase.from("clients").select("*").order("name"),
     ]);
 
     if (proj.data) setProjects(proj.data);
     if (fav.data) setFavorites(fav.data);
-
-    // I NOMI dei clienti servono a tutti (per cercare e vedere su cosa si
-    // lavora). La RLS li rende leggibili a ogni utente attivo. I dati
-    // economici (project_finance) restano riservati agli admin.
-    const cliRes = await supabase.from("clients").select("*").order("name");
-    if (cliRes.data) setClients(cliRes.data);
+    if (cli.data) setClients(cli.data);
 
     if (isAdmin) {
       const fin = await supabase.from("project_finance").select("*");
@@ -115,6 +115,7 @@ export function DataProvider({ children }) {
         projects: proj.data || [],
         entries: ent.data,
         favorites: fav.data || [],
+        clients: cli.data || [],
       });
     }
   }, [user, isAdmin]);
@@ -133,6 +134,7 @@ export function DataProvider({ children }) {
       setProjects(cache.projects || []);
       setEntries(cache.entries || []);
       setFavorites(cache.favorites || []);
+      setClients(cache.clients || []);
       setLoading(false);
     }
     fetchAll().finally(() => setLoading(false));
@@ -250,7 +252,7 @@ export function DataProvider({ children }) {
 
   // ---------- Timer ----------
   const startTimer = useCallback(
-    async ({ description = "", project_id = null, tags = [], billable = false, parallel = false }) => {
+    async ({ description = "", project_id = null, tags = [], billable = false, parallel = false, task_id = null }) => {
       const now = new Date();
 
       // ferma un eventuale timer in corso — salvo se sto avviando un
@@ -270,6 +272,7 @@ export function DataProvider({ children }) {
         description,
         tags,
         billable,
+        task_id, // collega la voce al task (v31): le ore si vedono sul task
         started_at: now.toISOString(),
         stopped_at: null,
         duration_seconds: null,
@@ -533,7 +536,8 @@ export function DataProvider({ children }) {
     [projects, startTimer, toast]
   );
 
-  // "Continua" un lavoro passato con un tap: riusa progetto e descrizione.
+  // "Continua" un lavoro passato con un tap: riusa progetto e descrizione
+  // (e il task collegato, se c'era).
   const startFromEntry = useCallback(
     async (entry) => {
       const proj = projects.find((p) => p.id === entry.project_id);
@@ -542,8 +546,27 @@ export function DataProvider({ children }) {
         project_id: entry.project_id || null,
         tags: entry.tags || [],
         billable: entry.billable ?? proj?.billable_default ?? false,
+        task_id: entry.task_id || null,
       });
       toast("Timer avviato", "ok");
+    },
+    [projects, startTimer, toast]
+  );
+
+  // Avvia il timer da un task (v31, admin): il timer prende il nome del
+  // task e resta collegato ad esso, così le ore si accumulano sul task.
+  const startFromTask = useCallback(
+    async (task, opts = {}) => {
+      const proj = projects.find((p) => p.id === task.project_id);
+      await startTimer({
+        description: task.title,
+        project_id: task.project_id || null,
+        tags: [],
+        billable: proj?.billable_default || false,
+        parallel: !!opts.parallel,
+        task_id: task.id,
+      });
+      toast(opts.parallel ? "Secondo timer avviato sul task" : "Timer avviato sul task", "ok");
     },
     [projects, startTimer, toast]
   );
@@ -717,6 +740,7 @@ export function DataProvider({ children }) {
     removeFavorite,
     startFromFavorite,
     startFromEntry,
+    startFromTask,
     addProject,
     updateProject,
     projectById,

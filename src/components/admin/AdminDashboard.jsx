@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../../lib/supabase";
 import { useData } from "../../state/DataContext.jsx";
 import { ProgressRing, Donut, MiniBars, HBar, LineChart } from "../Charts.jsx";
+import Skeleton from "../Skeleton.jsx";
 import {
   entrySeconds, fmtDuration, startOfWeek, startOfMonth, dayKey,
 } from "../../lib/format.js";
@@ -74,6 +75,7 @@ export default function AdminDashboard() {
   const [people, setPeople] = useState({});
   const [budgetUsed, setBudgetUsed] = useState({}); // project_id -> secs totali
   const [loading, setLoading] = useState(true);
+  const [showAnomalies, setShowAnomalies] = useState(false); // dettaglio voci anomale (v31)
 
   const from = period === "week" ? startOfWeek() : period === "month" ? startOfMonth() : new Date(0);
 
@@ -112,7 +114,7 @@ export default function AdminDashboard() {
 
   useEffect(() => { load(); }, [period]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (loading) return <div className="center" style={{ marginTop: 40 }}><span className="spinner" /></div>;
+  if (loading) return <Skeleton rows={5} height={80} />;
 
   // ---- calcoli economici ----
   let revenue = 0, cost = 0, totalSecs = 0, billableSecs = 0;
@@ -281,9 +283,48 @@ export default function AdminDashboard() {
       </div>
 
       {anomalies.length > 0 && (
-        <div className="banner banner-warn" style={{ marginTop: 4 }}>
-          ⚠️ {anomalies.length} {anomalies.length === 1 ? "voce anomala" : "voci anomale"} nel periodo — controlla la scheda “Attività”.
-        </div>
+        <>
+          <div
+            className="banner banner-warn"
+            style={{ marginTop: 4, cursor: "pointer" }}
+            onClick={() => setShowAnomalies((v) => !v)}
+          >
+            ⚠️ {anomalies.length} {anomalies.length === 1 ? "voce anomala" : "voci anomale"} nel periodo —{" "}
+            <b>{showAnomalies ? "nascondi" : "tocca per vederle"}</b>
+          </div>
+          {showAnomalies && (
+            <div className="card" style={{ marginTop: 8 }}>
+              {anomalies.slice(0, 12).map((a, i) => {
+                const e = a.entry;
+                const p = projectById(e.project_id);
+                return (
+                  <div key={e.id || i} style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)" }}>
+                    <div className="row-between" style={{ gap: 10 }}>
+                      <span style={{ fontWeight: 600, fontSize: 13.5, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {e.description || p?.name || "Senza descrizione"}
+                      </span>
+                      {a.pct != null && (
+                        <span style={{ color: a.pct >= 0 ? "var(--stop)" : "var(--warn)", fontWeight: 700, fontSize: 12.5, flexShrink: 0 }}>
+                          {a.pct > 0 ? "+" : ""}{Math.round(a.pct)}%
+                        </span>
+                      )}
+                    </div>
+                    <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                      {people[e.user_id]?.name || "—"}
+                      {" · "}{new Date(e.started_at).toLocaleDateString("it-IT", { day: "numeric", month: "short" })}
+                      {" · "}<b>{fmtDuration(a.seconds)}</b> invece dei soliti ~{fmtDuration(a.reference)}
+                      {p ? ` · ${p.name}` : ""}
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="muted" style={{ fontSize: 11.5, padding: "9px 14px", margin: 0 }}>
+                "Anomala" = durata molto diversa dal solito per quel tipo di attività: magari è giusta,
+                ma vale un'occhiata prima di fatturare. Dettaglio completo nella scheda "Attività".
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       {/* Ore vs contratto */}

@@ -1609,3 +1609,73 @@ img { -webkit-user-drag: none; user-select: none; }
 .announce-icon { font-size: 36px; margin-bottom: 8px; }
 .announce-title { font-size: 18px; font-weight: 700; margin: 0 0 10px; }
 .announce-msg { font-size: 14px; color: var(--ink-soft); margin: 0 0 20px; line-height: 1.5; white-space: pre-wrap; }
+
+/* ============ Skeleton di caricamento (v31) ============ */
+/* Al posto della rotellina: sagome che "luccicano" mentre arrivano i dati. */
+.skel {
+  position: relative;
+  overflow: hidden;
+  background: var(--line);
+  border-radius: var(--r-md, 12px);
+}
+.skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  animation: skel-slide 1.2s ease-in-out infinite;
+}
+@keyframes skel-slide {
+  100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel::after { animation: none; }
+}
+
+/* ============ Checklist del task nel timer attivo (v31) ============ */
+.run-steps {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.run-step {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 13px;
+  font-weight: 500;
+}
+.run-step.done {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.run-step-check {
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.run-step.done .run-step-check {
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--ok);
+  border-color: transparent;
+}
+
+/* ============ Card del coach (v31) ============ */
+.coach-card {
+  padding: 13px 15px;
+  margin-top: 12px;
+  border-left: 3px solid var(--brand);
+}

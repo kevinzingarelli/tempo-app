@@ -623,3 +623,17 @@ create policy client_errors_insert on public.client_errors
 drop policy if exists client_errors_select on public.client_errors;
 create policy client_errors_select on public.client_errors
   for select using (public.is_admin());
+
+-- ============================================================
+--  v31 — Task nel Timer + coach
+--  · admin_tasks.project_id: progetto collegato al task (facoltativo),
+--    così dal Timer il task parte con un tocco sul progetto giusto
+--  · time_entries.task_id: ogni voce può nascere da un task, e le ore
+--    lavorate compaiono sul task stesso
+--  Nessuna modifica ai dati esistenti: solo due colonne nuove, nullabili.
+-- ============================================================
+alter table public.admin_tasks
+  add column if not exists project_id uuid references public.projects(id) on delete set null;
+
+alter table public.time_entries
+  add column if not exists task_id uuid references public.admin_tasks(id) on delete set null;

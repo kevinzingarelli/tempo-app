@@ -3,7 +3,11 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../state/AuthContext.jsx";
 import { useData } from "../../state/DataContext.jsx";
 import Sheet from "../Sheet.jsx";
+import Skeleton from "../Skeleton.jsx";
 import { IconPlus, IconCheck } from "../../lib/icons.jsx";
+import { entrySeconds, fmtDuration } from "../../lib/format.js";
+import { askCoach, coachErrorMessage } from "../../lib/coach.js";
+import { buildCoachPayload } from "../TaskPanel.jsx";
 
 // Task gamificati per gli admin (v30) — Kevin e Asia. Ogni task ha
 // scadenza, priorità e una checklist di passi: la barra di avanzamento
@@ -32,16 +36,38 @@ function progressOf(task) {
 
 function TaskForm({ task, admins, onClose, onSaved }) {
   const { user } = useAuth();
-  const { toast } = useData();
+  const { toast, activeProjects } = useData();
   const editing = !!task;
   const [title, setTitle] = useState(task?.title || "");
   const [notes, setNotes] = useState(task?.notes || "");
   const [ownerId, setOwnerId] = useState(task?.owner_id || user.id);
   const [priority, setPriority] = useState(task?.priority || "media");
   const [dueDate, setDueDate] = useState(task?.due_date || "");
+  const [projectId, setProjectId] = useState(task?.project_id || "");
   const [steps, setSteps] = useState(task?.steps || []);
   const [newStep, setNewStep] = useState("");
   const [busy, setBusy] = useState(false);
+  const [genBusy, setGenBusy] = useState(false);
+
+  // Il coach propone i passi partendo da titolo e note (v31).
+  async function genSteps() {
+    if (!title.trim() || genBusy) return;
+    setGenBusy(true);
+    try {
+      const { steps: gen } = await askCoach("steps", { titolo: title.trim(), note: notes.trim() || undefined });
+      if (Array.isArray(gen) && gen.length) {
+        setSteps((s) => [
+          ...s,
+          ...gen.map((text) => ({ id: crypto.randomUUID(), text: String(text).slice(0, 120), done: false })),
+        ]);
+        toast("Passi proposti dal coach: sistemali come preferisci.", "ok");
+      }
+    } catch (e) {
+      toast(coachErrorMessage(e), "error");
+    } finally {
+      setGenBusy(false);
+    }
+  }
 
   function addStep() {
     const t = newStep.trim();
@@ -65,6 +91,7 @@ function TaskForm({ task, admins, onClose, onSaved }) {
       owner_id: ownerId,
       priority,
       due_date: dueDate || null,
+      project_id: projectId || null,
       steps,
     };
     try {
@@ -148,6 +175,19 @@ function TaskForm({ task, admins, onClose, onSaved }) {
       </div>
 
       <div className="sheet-row">
+        <label className="field-label">Progetto collegato (facoltativo)</label>
+        <select className="field" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+          <option value="">Nessun progetto</option>
+          {activeProjects.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+        <p className="muted" style={{ fontSize: 12, marginTop: 5 }}>
+          Con un progetto collegato, dal Timer il task parte con un tocco e le ore finiscono nel posto giusto.
+        </p>
+      </div>
+
+      <div className="sheet-row">
         <label className="field-label">Note (facoltative)</label>
         <textarea className="field" style={{ minHeight: 56 }} placeholder="Contesto, link, dettagli…" value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
@@ -192,6 +232,14 @@ function TaskForm({ task, admins, onClose, onSaved }) {
             <IconPlus style={{ width: 15, height: 15 }} />
           </button>
         </div>
+        <button
+          className="btn btn-ghost btn-sm"
+          style={{ marginTop: 8 }}
+          onClick={genSteps}
+          disabled={!title.trim() || genBusy}
+        >
+          {genBusy ? <span className="spinner" /> : <>✨ Fatti proporre i passi dal coach</>}
+        </button>
       </div>
 
       <button className="btn btn-primary btn-block btn-lg" onClick={save} disabled={busy}>
@@ -213,26 +261,38 @@ function TaskForm({ task, admins, onClose, onSaved }) {
 }
 
 export default function TaskBoard() {
-  const { user } = useAuth();
-  const { toast } = useData();
+  const { user, profile } = useAuth();
+  const { toast, entries, projectById } = useData();
   const [tasks, setTasks] = useState([]);
   const [admins, setAdmins] = useState([]);
+  const [taskSecs, setTaskSecs] = useState({}); // task_id -> secondi lavorati (tutte le persone)
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("mine"); // "mine" | "all"
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
   const [missingTable, setMissingTable] = useState(false);
+  const [weekly, setWeekly] = useState(null); // riepilogo del coach
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [tRes, aRes] = await Promise.all([
+      const [tRes, aRes, eRes] = await Promise.all([
         supabase.from("admin_tasks").select("*").order("created_at", { ascending: false }),
         supabase.from("profiles").select("id, name, role, active").eq("role", "admin"),
+        // ore realmente lavorate su ciascun task (voci di chiunque)
+        supabase
+          .from("time_entries")
+          .select("task_id, started_at, stopped_at, paused_at, paused_seconds, duration_seconds")
+          .not("task_id", "is", null),
       ]);
       if (tRes.error) throw tRes.error;
       setTasks(tRes.data || []);
       setAdmins((aRes.data || []).filter((a) => a.active !== false));
+      if (eRes.data) {
+        const m = {};
+        for (const e of eRes.data) m[e.task_id] = (m[e.task_id] || 0) + entrySeconds(e);
+        setTaskSecs(m);
+      }
       setMissingTable(false);
     } catch (e) {
       const msg = (e?.message || "").toLowerCase();
@@ -275,7 +335,33 @@ export default function TaskBoard() {
   const doneThisWeek = visible.filter((t) => t.status === "done" && t.completed_at >= weekAgo).length;
   const overdue = open.filter((t) => t.due_date && t.due_date < today).length;
 
-  if (loading) return <div className="center" style={{ marginTop: 40 }}><span className="spinner" /></div>;
+  // Riepilogo settimanale scritto dal coach (v31)
+  async function askWeekly() {
+    setWeekly({ status: "loading" });
+    try {
+      const base = buildCoachPayload({
+        tasks: tasks.filter((t) => t.status !== "done"),
+        entries,
+        profile,
+        projectById,
+        userId: user.id,
+      });
+      const payload = {
+        ...base,
+        completati_settimana: tasks
+          .filter((t) => t.status === "done" && t.completed_at >= weekAgo)
+          .map((t) => t.title)
+          .slice(0, 12),
+      };
+      const { text } = await askCoach("weekly", payload);
+      setWeekly({ status: "done", text });
+    } catch (e) {
+      setWeekly(null);
+      toast(coachErrorMessage(e), "error");
+    }
+  }
+
+  if (loading) return <Skeleton rows={4} height={72} />;
 
   if (missingTable)
     return (
@@ -292,6 +378,10 @@ export default function TaskBoard() {
         <div className="stat"><div className="stat-value">🏆 {doneThisWeek}</div><div className="stat-label">Completati (7gg)</div></div>
         <div className="stat"><div className="stat-value" style={overdue > 0 ? { color: "var(--stop)" } : undefined}>{overdue}</div><div className="stat-label">In ritardo</div></div>
       </div>
+
+      <button className="link-btn" style={{ fontSize: 12.5, marginBottom: 12 }} onClick={askWeekly}>
+        🧠 Chiedi al coach il riepilogo della settimana
+      </button>
 
       <div className="row-between" style={{ marginBottom: 12 }}>
         <div className="segment" style={{ width: "auto" }}>
@@ -313,6 +403,8 @@ export default function TaskBoard() {
         const late = t.due_date && t.due_date < today;
         const steps = t.steps || [];
         const nextStep = steps.find((s) => !s.done);
+        const proj = projectById(t.project_id);
+        const secs = taskSecs[t.id] || 0;
         return (
           <div key={t.id} className="card" style={{ padding: 14, marginBottom: 10 }}>
             <div className="row-between" style={{ alignItems: "flex-start", gap: 10 }}>
@@ -326,6 +418,13 @@ export default function TaskBoard() {
                       {late ? "⚠️ scaduto " : "📅 "}{fmtDue(t.due_date)}
                     </span>
                   )}
+                  {proj && (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span className="entry-dot" style={{ background: proj.color || "#999", width: 8, height: 8 }} />
+                      {proj.name}
+                    </span>
+                  )}
+                  {secs > 0 && <span>⏱ {fmtDuration(secs)}</span>}
                 </div>
               </div>
               <span className="muted" style={{ fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>{pct}%</span>
@@ -371,6 +470,14 @@ export default function TaskBoard() {
 
       {creating && <TaskForm admins={admins} onClose={() => setCreating(false)} onSaved={load} />}
       {editing && <TaskForm task={editing} admins={admins} onClose={() => setEditing(null)} onSaved={load} />}
+
+      {/* Riepilogo settimanale del coach (v31) */}
+      <Sheet open={!!weekly} onClose={() => setWeekly(null)} title="🧠 La tua settimana">
+        {weekly?.status === "loading" && <Skeleton rows={3} height={20} />}
+        {weekly?.status === "done" && (
+          <p style={{ fontSize: 14.5, lineHeight: 1.65, margin: 0 }}>{weekly.text}</p>
+        )}
+      </Sheet>
     </div>
   );
 }

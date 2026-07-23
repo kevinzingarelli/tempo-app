@@ -18,23 +18,39 @@ function norm(s) {
 }
 
 export default function ProjectPicker({ open, onClose, value, onChange, favorites, onPickFavorite }) {
-  const { activeProjects, clientById, entries, addProject, toast } = useData();
+  const { activeProjects, clients, clientById, entries, addProject, addClient, toast } = useData();
   const { isAdmin } = useAuth();
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(QUICK_COLORS[0]);
+  const [newClientId, setNewClientId] = useState(""); // "" = senza cliente, "__new" = creane uno
+  const [newClientName, setNewClientName] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function createQuick() {
     if (!newName.trim()) return;
     setBusy(true);
-    const created = await addProject({ name: newName.trim(), color: newColor, billable_default: false });
+    // cliente: uno esistente, uno nuovo creato al volo, o nessuno
+    let clientId = newClientId && newClientId !== "__new" ? newClientId : null;
+    if (newClientId === "__new" && newClientName.trim()) {
+      const c = await addClient(newClientName.trim());
+      if (!c) { setBusy(false); return; } // errore già segnalato dal toast
+      clientId = c.id;
+    }
+    const created = await addProject({
+      name: newName.trim(),
+      color: newColor,
+      billable_default: false,
+      client_id: clientId,
+    });
     setBusy(false);
     if (created) {
       toast("Progetto creato.", "ok");
       setCreating(false);
       setNewName("");
+      setNewClientId("");
+      setNewClientName("");
       onChange(created.id);
       onClose();
     }
@@ -151,8 +167,35 @@ export default function ProjectPicker({ open, onClose, value, onChange, favorite
                 />
               ))}
             </div>
+            <label className="field-label">Cliente</label>
+            <select
+              className="field"
+              value={newClientId}
+              onChange={(e) => setNewClientId(e.target.value)}
+              style={{ marginBottom: newClientId === "__new" ? 8 : 10 }}
+            >
+              <option value="">Senza cliente</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+              <option value="__new">➕ Nuovo cliente…</option>
+            </select>
+            {newClientId === "__new" && (
+              <input
+                className="field"
+                style={{ marginBottom: 10 }}
+                placeholder="Nome del nuovo cliente"
+                value={newClientName}
+                onChange={(e) => setNewClientName(e.target.value)}
+              />
+            )}
             <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn btn-primary" style={{ flex: 1 }} onClick={createQuick} disabled={busy || !newName.trim()}>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1 }}
+                onClick={createQuick}
+                disabled={busy || !newName.trim() || (newClientId === "__new" && !newClientName.trim())}
+              >
                 {busy ? <span className="spinner spinner-white" /> : "Crea e seleziona"}
               </button>
               <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setCreating(false)}>

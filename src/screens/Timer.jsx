@@ -9,6 +9,8 @@ import TeamNote from "../components/TeamNote.jsx";
 import EntryEditor from "../components/EntryEditor.jsx";
 import ProjectPicker from "../components/ProjectPicker.jsx";
 import Sheet from "../components/Sheet.jsx";
+import Skeleton from "../components/Skeleton.jsx";
+import { useAdminTasks, TaskQuickList, RunningTaskSteps, CoachCard } from "../components/TaskPanel.jsx";
 import {
   fmtClock,
   fmtDuration,
@@ -44,6 +46,7 @@ export default function Timer() {
     updateRunning,
     startFromFavorite,
     startFromEntry,
+    startFromTask,
     removeFavorite,
     projectById,
     clientById,
@@ -96,6 +99,8 @@ export default function Timer() {
   }, []);
   const [parallelOpen, setParallelOpen] = useState(false);
   const [favToStart, setFavToStart] = useState(null); // preferito in attesa di scelta (v28)
+  const [taskToStart, setTaskToStart] = useState(null); // task in attesa di scelta (v31)
+  const [draftTaskId, setDraftTaskId] = useState(null); // task collegato al prossimo avvio (v31)
   const [parallelDesc, setParallelDesc] = useState("");
   const [parallelProject, setParallelProject] = useState(null);
   const [parallelPickerOpen, setParallelPickerOpen] = useState(false);
@@ -114,6 +119,16 @@ export default function Timer() {
 
   const { reloadProfile } = useAuth();
   const { toast } = useData();
+
+  // Task admin nella schermata Timer (v31): lista rapida, checklist nel
+  // timer attivo e ore accumulate per task (dalle proprie voci).
+  const { tasks: adminTasks, toggleStep: toggleTaskStep } = useAdminTasks(isAdmin);
+  const taskSecs = {};
+  if (isAdmin) {
+    for (const e of entries) {
+      if (e.task_id) taskSecs[e.task_id] = (taskSecs[e.task_id] || 0) + entrySeconds(e);
+    }
+  }
 
   function chooseTheme(p) {
     setThemePref(p);
@@ -170,10 +185,12 @@ export default function Timer() {
       if (runningEntry) {
         setDraftDesc(runningEntry.description || "");
         setDraftProject(runningEntry.project_id || null);
+        setDraftTaskId(runningEntry.task_id || null);
       } else if (wasRunning) {
         // il timer è appena stato fermato: ripulisco i campi
         setDraftDesc("");
         setDraftProject(null);
+        setDraftTaskId(null);
       }
     }
   }, [runningEntry]);
@@ -237,12 +254,14 @@ export default function Timer() {
       project_id: draftProject,
       tags: [],
       billable: projectById(draftProject)?.billable_default || false,
+      task_id: draftTaskId,
     });
   }
   function onStop() {
     stopTimer(runningEntry?.id);
     setDraftDesc("");
     setDraftProject(null);
+    setDraftTaskId(null);
   }
 
   // Avvio da preferito (v28): se c'è già un timer attivo, chiedo cosa fare
@@ -254,6 +273,21 @@ export default function Timer() {
       setFavToStart(f);
     } else {
       startFromFavorite(f);
+    }
+  }
+
+  // Avvio dal task (v31, admin): come per i preferiti, se c'è già un timer
+  // chiedo cosa fare. Se il task non ha un progetto collegato, precompilo
+  // descrizione + collegamento e apro la scelta progetto: poi basta "Avvia".
+  function handleTaskClick(t) {
+    if (running) {
+      setTaskToStart(t);
+    } else if (t.project_id) {
+      startFromTask(t);
+    } else {
+      setDraftDesc(t.title);
+      setDraftTaskId(t.id);
+      setPickerOpen(true);
     }
   }
 
@@ -510,6 +544,14 @@ export default function Timer() {
 
         </div>
 
+        {/* Checklist del task collegato, dentro il timer attivo (v31) */}
+        {running && isAdmin && runningEntry?.task_id && (
+          <RunningTaskSteps
+            task={adminTasks.find((t) => t.id === runningEntry.task_id)}
+            onToggle={toggleTaskStep}
+          />
+        )}
+
         {longRunning && (
           <div
             className="paused-badge"
@@ -682,6 +724,26 @@ export default function Timer() {
         </>
       )}
 
+      {/* Task e coach (v31, solo admin) */}
+      {isAdmin && (
+        <>
+          <TaskQuickList
+            tasks={adminTasks}
+            userId={user?.id}
+            onStart={handleTaskClick}
+            runningTaskId={runningEntry?.task_id || null}
+            taskSecs={taskSecs}
+          />
+          <CoachCard
+            tasks={adminTasks}
+            entries={entries}
+            profile={profile}
+            projectById={projectById}
+            userId={user?.id}
+          />
+        </>
+      )}
+
       </div>{/* /timer-col-main */}
 
       <div className="timer-col-side">
@@ -758,9 +820,7 @@ export default function Timer() {
 
       {/* Ultimi lavori */}
       {loading && completed.length === 0 ? (
-        <div className="center" style={{ marginTop: 40 }}>
-          <span className="spinner" />
-        </div>
+        <Skeleton rows={4} height={54} />
       ) : groups.length === 0 ? (
         search && (
           <div className="empty">
@@ -877,21 +937,36 @@ export default function Timer() {
         />
       )}
 
-      {/* Scelta all'avvio di un preferito con timer già attivo (v28) */}
-      <Sheet open={!!favToStart} onClose={() => setFavToStart(null)} title="C'è già un timer attivo">
-        {favToStart && (
+      {/* Scelta all'avvio di un preferito (v28) o di un task (v31) con
+          timer già attivo: sostituire o — per gli admin — andare in parallelo. */}
+      <Sheet
+        open={!!favToStart || !!taskToStart}
+        onClose={() => { setFavToStart(null); setTaskToStart(null); }}
+        title="C'è già un timer attivo"
+      >
+        {(favToStart || taskToStart) && (
           <>
             <p className="muted" style={{ fontSize: 13, marginBottom: 6 }}>
               Stai lavorando su:{" "}
               <b>{runningEntry?.description || projectById(runningEntry?.project_id)?.name || "senza descrizione"}</b>
             </p>
             <p className="muted" style={{ fontSize: 13, marginBottom: 14 }}>
-              Vuoi avviare <b>{favToStart.description || projectById(favToStart.project_id)?.name || "il preferito"}</b>?
+              Vuoi avviare{" "}
+              <b>
+                {taskToStart
+                  ? taskToStart.title
+                  : favToStart.description || projectById(favToStart.project_id)?.name || "il preferito"}
+              </b>?
             </p>
             {isAdmin && (
               <button
                 className="btn btn-primary btn-block btn-lg"
-                onClick={async () => { const f = favToStart; setFavToStart(null); await startFromFavorite(f, { parallel: true }); }}
+                onClick={async () => {
+                  const f = favToStart, t = taskToStart;
+                  setFavToStart(null); setTaskToStart(null);
+                  if (t) await startFromTask(t, { parallel: true });
+                  else await startFromFavorite(f, { parallel: true });
+                }}
               >
                 <IconPlay /> Avvia in parallelo (il primo continua)
               </button>
@@ -899,11 +974,20 @@ export default function Timer() {
             <button
               className={"btn btn-block " + (isAdmin ? "btn-soft" : "btn-primary btn-lg")}
               style={{ marginTop: 10 }}
-              onClick={async () => { const f = favToStart; setFavToStart(null); await startFromFavorite(f); }}
+              onClick={async () => {
+                const f = favToStart, t = taskToStart;
+                setFavToStart(null); setTaskToStart(null);
+                if (t) await startFromTask(t);
+                else await startFromFavorite(f);
+              }}
             >
               <IconStop /> Ferma il timer attivo e sostituiscilo
             </button>
-            <button className="btn btn-ghost btn-block" style={{ marginTop: 10 }} onClick={() => setFavToStart(null)}>
+            <button
+              className="btn btn-ghost btn-block"
+              style={{ marginTop: 10 }}
+              onClick={() => { setFavToStart(null); setTaskToStart(null); }}
+            >
               Annulla
             </button>
           </>
