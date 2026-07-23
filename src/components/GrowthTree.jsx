@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import { supabase } from "../lib/supabase";
 import { useData } from "../state/DataContext.jsx";
 import { entrySeconds, fmtDuration } from "../lib/format.js";
@@ -425,7 +425,7 @@ export function Scene({ hourNow, wx, month, growth, treesGrown, currentSpecies, 
 // scorciatoia per non ripetere mix con guard
 function mix2(a, b, t) { return t > 0 ? mix(a, b, t) : a; }
 
-export default function GrowthTree({ userId, bloomCount = 0 }) {
+function GrowthTree({ userId, bloomCount = 0 }) {
   const { runningEntries } = useData();
   const [baseSecs, setBaseSecs] = useState(null);
   const [, setTick] = useState(0);
@@ -513,3 +513,9 @@ export default function GrowthTree({ userId, bloomCount = 0 }) {
     </div>
   );
 }
+
+// Memoizzato (v35): il boschetto disegna una scena SVG ricca. Senza memo
+// veniva ridisegnato a ogni tick del timer (una volta al secondo),
+// causando lo scatto percepito su pausa/stop. Ha stato proprio interno,
+// quindi non serve ridisegnarlo quando la Home cambia per altri motivi.
+export default memo(GrowthTree);

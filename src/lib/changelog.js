@@ -2,10 +2,23 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "34";
+export const CURRENT_VERSION = "35";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "35",
+    date: "2026-07-23",
+    time: "19:15",
+    title: "Timer più svelto e avvio al volo",
+    items: [
+      "Pausa e stop rispondono subito: niente più attimo di attesa quando tocchi i pulsanti",
+      "Tocca “Su cosa lavori?” e il timer parte all'istante — la descrizione la scrivi mentre corre",
+    ],
+    adminItems: [
+      "In Home i Preferiti sono tornati sopra i task, a portata di pollice",
+    ],
+  },
   {
     version: "34",
     date: "2026-07-23",

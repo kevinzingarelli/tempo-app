@@ -167,9 +167,11 @@ export default function Timer() {
     setNewsBadge(false);
   }
 
-  // tick ogni secondo quando il timer corre
+  // tick ogni secondo quando il timer corre — ma NON in pausa: da fermo il
+  // cronometro non cambia, quindi ridisegnare ogni secondo era spreco che
+  // rendeva meno pronta l'interfaccia (v35).
   useEffect(() => {
-    if (!runningEntry) return;
+    if (!runningEntry || runningEntry.paused_at) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [runningEntry]);
@@ -318,6 +320,13 @@ export default function Timer() {
     if (running && draftDesc !== runningEntry.description) {
       updateRunning({ description: draftDesc });
     }
+  }
+  // Toccare "Su cosa lavori?" avvia subito il timer (v35): si registra
+  // il tempo dal primo istante e la descrizione si scrive a cronometro
+  // già in moto, come su Toggl. Se un timer è già attivo, non fa nulla.
+  function handleDescFocus() {
+    setDescFocus(true);
+    if (!running) onStart();
   }
 
   // ---- Riepilogo di fine giornata ----
@@ -480,7 +489,7 @@ export default function Timer() {
             placeholder={running ? "Aggiungi una descrizione" : "Su cosa lavori?"}
             value={draftDesc}
             onChange={(e) => setDraftDesc(e.target.value)}
-            onFocus={() => setDescFocus(true)}
+            onFocus={handleDescFocus}
             onBlur={() => {
               handleDescBlur();
               setTimeout(() => setDescFocus(false), 150);
@@ -653,7 +662,51 @@ export default function Timer() {
         </button>
       </div>
 
-      {/* Task e coach (v34, solo admin): il piano viene prima delle scorciatoie */}
+      {/* Preferiti — sopra i task: sono l'avvio rapido di tutti i giorni (v35) */}
+      {favorites.length > 0 && (
+        <>
+          <div className="section-label">Preferiti</div>
+          <div className="card">
+            {favorites.map((f) => {
+              const p = projectById(f.project_id);
+              return (
+                <div key={f.id} className="entry">
+                  <span
+                    className="entry-dot"
+                    style={{ background: p?.color || "#cfcfca" }}
+                  />
+                  <div
+                    className="entry-main"
+                    onClick={() => handleFavoriteClick(f)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <div className="entry-desc">
+                      {f.description || <span className="muted">Senza descrizione</span>}
+                    </div>
+                    {p && <div className="entry-sub">{p.name}</div>}
+                  </div>
+                  <button
+                    className="entry-play"
+                    onClick={() => handleFavoriteClick(f)}
+                    aria-label="Avvia preferito"
+                  >
+                    <IconPlay />
+                  </button>
+                  <button
+                    onClick={() => removeFavorite(f.id)}
+                    style={{ color: "#c0c0c0", padding: 4 }}
+                    aria-label="Rimuovi preferito"
+                  >
+                    <IconStar style={{ width: 18, height: 18, color: "#ffb400" }} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* Task e coach (v34, solo admin) */}
       {isAdmin && (
         <>
           <TaskQuickList
@@ -706,50 +759,6 @@ export default function Timer() {
                 ))}
               </div>
             )}
-          </div>
-        </>
-      )}
-
-      {/* Preferiti */}
-      {favorites.length > 0 && (
-        <>
-          <div className="section-label">Preferiti</div>
-          <div className="card">
-            {favorites.map((f) => {
-              const p = projectById(f.project_id);
-              return (
-                <div key={f.id} className="entry">
-                  <span
-                    className="entry-dot"
-                    style={{ background: p?.color || "#cfcfca" }}
-                  />
-                  <div
-                    className="entry-main"
-                    onClick={() => handleFavoriteClick(f)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <div className="entry-desc">
-                      {f.description || <span className="muted">Senza descrizione</span>}
-                    </div>
-                    {p && <div className="entry-sub">{p.name}</div>}
-                  </div>
-                  <button
-                    className="entry-play"
-                    onClick={() => handleFavoriteClick(f)}
-                    aria-label="Avvia preferito"
-                  >
-                    <IconPlay />
-                  </button>
-                  <button
-                    onClick={() => removeFavorite(f.id)}
-                    style={{ color: "#c0c0c0", padding: 4 }}
-                    aria-label="Rimuovi preferito"
-                  >
-                    <IconStar style={{ width: 18, height: 18, color: "#ffb400" }} />
-                  </button>
-                </div>
-              );
-            })}
           </div>
         </>
       )}
