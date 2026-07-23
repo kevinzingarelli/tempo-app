@@ -489,9 +489,11 @@ h1, h2, h3 {
 .login-p { color: var(--ink-soft); margin: 6px 0 28px; font-size: 15px; }
 
 /* ---------- Report ---------- */
+/* minmax(0, 1fr): colonne DAVVERO uguali — con 1fr semplice una cifra
+   lunga ("28h 33m") allargava la sua card più delle altre (v32). */
 .stat-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 8px;
 }
@@ -501,54 +503,61 @@ h1, h2, h3 {
   border-radius: var(--r-md);
   padding: 14px;
   box-shadow: var(--shadow-sm);
+  min-width: 0;
 }
 .stat-value {
   font-family: var(--font-display);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   font-size: 24px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.stat-label { font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; }
+.stat-label { font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* Righe-barra da gestionale (v32): griglia a colonne fisse così nomi,
+   barre e valori sono perfettamente incolonnati; riga su riga separate
+   da un filo sottile. La barra si riempie in % sul totale, col colore
+   del progetto. */
 .bar-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(80px, 42%) minmax(88px, max-content);
   align-items: center;
-  gap: 10px;
-  padding: 9px 0;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
 }
+.bar-row:last-child { border-bottom: none; }
 .bar-name {
-  width: 96px;
-  font-size: 12.5px;
+  min-width: 0;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex-shrink: 0;
-}
-@media (min-width: 900px) {
-  .bar-name { width: 220px; }
 }
 .bar-track {
-  flex: 1;
-  height: 22px;
+  height: 20px;
   background: var(--ring-track);
-  border-radius: 6px;
+  border-radius: 999px;
   overflow: hidden;
+  display: block;
 }
 .bar-fill {
   height: 100%;
-  border-radius: 6px;
-  min-width: 3px;
+  border-radius: 999px;
+  min-width: 4px;
+  display: block;
   transition: width 0.5s ease;
 }
 .bar-val {
   font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
-  font-size: 11.5px;
-  width: 96px;
+  font-size: 12px;
   text-align: right;
-  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* ---------- Banner / stato ---------- */
@@ -853,7 +862,7 @@ img { -webkit-user-drag: none; user-select: none; }
   .nav-btn svg { width: 20px; height: 20px; }
   .nav-btn:hover { background: rgba(39, 38, 77, 0.05); color: var(--ink-soft); }
   .nav-btn.active:hover { color: var(--brand); }
-  .stat-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
   .sheet-backdrop { align-items: center; }
   .sheet {
     max-width: 520px;
@@ -1678,4 +1687,12 @@ img { -webkit-user-drag: none; user-select: none; }
   padding: 13px 15px;
   margin-top: 12px;
   border-left: 3px solid var(--brand);
+}
+
+/* ============ Voce non categorizzata (v32) ============ */
+.entry-flag {
+  color: var(--warn);
+  font-weight: 700;
+  margin-right: 8px;
+  white-space: nowrap;
 }

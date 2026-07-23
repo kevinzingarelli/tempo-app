@@ -120,9 +120,9 @@ export default function Timer() {
   const { reloadProfile } = useAuth();
   const { toast } = useData();
 
-  // Task admin nella schermata Timer (v31): lista rapida, checklist nel
-  // timer attivo e ore accumulate per task (dalle proprie voci).
-  const { tasks: adminTasks, toggleStep: toggleTaskStep } = useAdminTasks(isAdmin);
+  // Task admin nella Home (v31/v32): elenco con creazione e modifica,
+  // checklist nel timer attivo e ore accumulate per task.
+  const { tasks: adminTasks, admins: taskAdmins, toggleStep: toggleTaskStep, reload: reloadTasks, loaded: tasksLoaded } = useAdminTasks(isAdmin);
   const taskSecs = {};
   if (isAdmin) {
     for (const e of entries) {
@@ -724,15 +724,19 @@ export default function Timer() {
         </>
       )}
 
-      {/* Task e coach (v31, solo admin) */}
+      {/* Task e coach (v31/v32, solo admin) */}
       {isAdmin && (
         <>
           <TaskQuickList
             tasks={adminTasks}
+            admins={taskAdmins}
             userId={user?.id}
             onStart={handleTaskClick}
             runningTaskId={runningEntry?.task_id || null}
             taskSecs={taskSecs}
+            reload={reloadTasks}
+            projectById={projectById}
+            loaded={tasksLoaded}
           />
           <CoachCard
             tasks={adminTasks}
@@ -850,6 +854,23 @@ export default function Timer() {
       ) : (
         <>
           <div className="section-label">Ultimi lavori</div>
+
+          {/* Voci non categorizzate (v32): tutte dovrebbero avere progetto
+              (e il progetto un cliente). Le righe interessate hanno il ⚠️. */}
+          {(() => {
+            const bad = completed.filter((e) => {
+              const p = projectById(e.project_id);
+              return !e.project_id || (isAdmin && p && !p.client_id);
+            });
+            if (bad.length === 0) return null;
+            return (
+              <div className="banner banner-warn" style={{ fontSize: 12.5, marginBottom: 10 }}>
+                ⚠️ {bad.length === 1 ? "1 voce non è categorizzata" : `${bad.length} voci non sono categorizzate`} bene
+                ({isAdmin ? "manca il progetto o il cliente" : "manca il progetto"}):
+                cercale qui sotto dal simbolo ⚠️ e toccale per sistemarle.
+              </div>
+            );
+          })()}
 
           {/* Oggi: sempre estesa */}
           {todayGroup && (

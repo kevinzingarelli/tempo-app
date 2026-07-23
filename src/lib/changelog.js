@@ -2,10 +2,27 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "31";
+export const CURRENT_VERSION = "32";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "32",
+    date: "2026-07-23",
+    time: "14:30",
+    title: "Home, report più curato e voci da sistemare",
+    items: [
+      "La prima schermata ora si chiama Home: è il punto di partenza della giornata",
+      "Report più professionale: schede tutte della stessa larghezza e barre che si riempiono in percentuale sul totale, col colore del progetto",
+      "Negli Ultimi lavori le voci senza progetto sono segnalate con un ⚠️: toccale per sistemarle",
+    ],
+    adminItems: [
+      "I task ora si creano e si modificano direttamente dalla Home (bottone Nuovo): tocco sul task = modifica, ▶ = timer. La scheda Task in Admin non serviva più ed è stata tolta",
+      "Filtro Miei/Tutti e completati di recente sempre a portata di mano in Home",
+      "Il riepilogo settimanale del coach è nella card del coach (link 'riepilogo settimana')",
+      "Per voi il ⚠️ segnala anche i progetti senza cliente",
+    ],
+  },
   {
     version: "31",
     date: "2026-07-23",

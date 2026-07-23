@@ -1,21 +1,21 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { entrySeconds, fmtDuration, startOfWeek, dayKey } from "../lib/format.js";
-import { IconPlay } from "../lib/icons.jsx";
+import { IconPlay, IconPlus } from "../lib/icons.jsx";
+import Sheet from "./Sheet.jsx";
+import Skeleton from "./Skeleton.jsx";
+import TaskForm, { PRIORITIES } from "./admin/TaskForm.jsx";
 import { askCoach, coachErrorMessage, COACH_NOT_CONFIGURED } from "../lib/coach.js";
 
 // ============================================================
-// Task nella schermata Timer (v31) — solo admin.
-// · TaskQuickList: i task più urgenti, un tocco e parte il timer
+// Task nella Home (v31, ampliato in v32) — solo admin.
+// La Home è ora IL posto dei task: si creano, si modificano e si
+// avviano da qui (la scheda in Admin non esiste più).
+// · TaskQuickList: elenco task con + Nuovo, filtro Miei/Tutti,
+//   completati di recente; tocco sul task = modifica, ▶ = timer
 // · RunningTaskSteps: la checklist del task DENTRO il timer attivo
-// · CoachCard: il consiglio del giorno del coach AI
+// · CoachCard: consiglio del giorno + riepilogo settimanale AI
 // ============================================================
-
-const PRIO = {
-  alta: { label: "Alta", color: "var(--stop)", order: 0 },
-  media: { label: "Media", color: "var(--warn)", order: 1 },
-  bassa: { label: "Bassa", color: "var(--ok)", order: 2 },
-};
 
 function isoToday() {
   const d = new Date();
@@ -26,23 +26,26 @@ export function sortByUrgency(list) {
   return [...list].sort((a, b) => {
     if ((a.due_date || "9999") !== (b.due_date || "9999"))
       return (a.due_date || "9999") < (b.due_date || "9999") ? -1 : 1;
-    return (PRIO[a.priority]?.order ?? 1) - (PRIO[b.priority]?.order ?? 1);
+    return (PRIORITIES[a.priority]?.order ?? 1) - (PRIORITIES[b.priority]?.order ?? 1);
   });
 }
 
-// Carica i task aperti (per la QuickList e per la checklist nel timer).
-// Se la tabella non esiste ancora resta silenziosamente vuoto.
+// Carica task (tutti, anche completati) e lista admin. Se la tabella
+// non esiste ancora resta silenziosamente vuoto.
 export function useAdminTasks(enabled) {
   const [tasks, setTasks] = useState([]);
+  const [admins, setAdmins] = useState([]);
+  const [loaded, setLoaded] = useState(false);
 
   const reload = useCallback(async () => {
     if (!enabled) return;
-    const { data, error } = await supabase
-      .from("admin_tasks")
-      .select("*")
-      .neq("status", "done")
-      .order("created_at", { ascending: false });
-    if (!error && data) setTasks(data);
+    const [tRes, aRes] = await Promise.all([
+      supabase.from("admin_tasks").select("*").order("created_at", { ascending: false }),
+      supabase.from("profiles").select("id, name, role, active").eq("role", "admin"),
+    ]);
+    if (!tRes.error && tRes.data) setTasks(tRes.data);
+    if (!aRes.error && aRes.data) setAdmins(aRes.data.filter((a) => a.active !== false));
+    setLoaded(true);
   }, [enabled]);
 
   useEffect(() => { reload(); }, [reload]);
@@ -53,62 +56,139 @@ export function useAdminTasks(enabled) {
     await supabase.from("admin_tasks").update({ steps }).eq("id", task.id);
   }, []);
 
-  return { tasks, toggleStep, reload };
+  return { tasks, admins, toggleStep, reload, loaded };
 }
 
-// I 3 task più urgenti dell'utente: tocca il ▶ e il timer parte col
-// nome del task. taskSecs = secondi già registrati per ciascun task.
-export function TaskQuickList({ tasks, userId, onStart, runningTaskId, taskSecs = {} }) {
+// Il pannello task della Home: elenco, creazione, modifica, avvio timer.
+export function TaskQuickList({ tasks, admins, userId, onStart, runningTaskId, taskSecs = {}, reload, projectById, loaded }) {
+  const [filter, setFilter] = useState("mine"); // "mine" | "all"
+  const [showAll, setShowAll] = useState(false);
+  const [showDone, setShowDone] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [creating, setCreating] = useState(false);
   const today = isoToday();
-  const mine = sortByUrgency(tasks.filter((t) => t.owner_id === userId)).slice(0, 3);
-  if (mine.length === 0) return null;
+
+  const visible = tasks.filter((t) => filter === "all" || t.owner_id === userId);
+  const open = sortByUrgency(visible.filter((t) => t.status !== "done"));
+  const done = visible
+    .filter((t) => t.status === "done")
+    .sort((a, b) => (b.completed_at || "").localeCompare(a.completed_at || ""))
+    .slice(0, 5);
+  const shown = showAll ? open : open.slice(0, 4);
+  const hidden = open.length - shown.length;
+  const nameOf = (id) => (admins.find((a) => a.id === id)?.name || "—").split(" ")[0];
 
   return (
     <>
-      <div className="section-label">I tuoi task 🎯</div>
-      <div className="card">
-        {mine.map((t) => {
-          const steps = t.steps || [];
-          const doneN = steps.filter((s) => s.done).length;
-          const pct = steps.length ? Math.round((doneN / steps.length) * 100) : 0;
-          const late = t.due_date && t.due_date < today;
-          const secs = taskSecs[t.id] || 0;
-          const isRunning = runningTaskId === t.id;
-          const pr = PRIO[t.priority] || PRIO.media;
-          return (
-            <div key={t.id} className="entry">
-              <span className="entry-dot" style={{ background: pr.color }} />
-              <div className="entry-main" onClick={() => !isRunning && onStart(t)} style={{ cursor: isRunning ? "default" : "pointer" }}>
-                <div className="entry-desc">{t.title}</div>
-                <div className="entry-sub" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {steps.length > 0 && <span>{doneN}/{steps.length} passi · {pct}%</span>}
-                  {t.due_date && (
-                    <span style={late ? { color: "var(--stop)", fontWeight: 700 } : undefined}>
-                      {late ? "⚠️ scaduto" : "📅"} {new Date(t.due_date + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" })}
-                    </span>
-                  )}
-                  {secs > 0 && <span>⏱ {fmtDuration(secs)}</span>}
-                </div>
-                {steps.length > 0 && (
-                  <div className="growth-bar" style={{ marginTop: 6, height: 5 }}>
-                    <div className="growth-fill" style={{ width: `${pct}%` }} />
+      <div className="row-between" style={{ marginTop: 20, marginBottom: 8 }}>
+        <div className="section-label" style={{ margin: 0 }}>I tuoi task 🎯</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {admins.length > 1 && (
+            <div className="segment" style={{ width: "auto", padding: 3 }}>
+              <button className={filter === "mine" ? "active" : ""} style={{ padding: "5px 11px", fontSize: 12 }} onClick={() => setFilter("mine")}>Miei</button>
+              <button className={filter === "all" ? "active" : ""} style={{ padding: "5px 11px", fontSize: 12 }} onClick={() => setFilter("all")}>Tutti</button>
+            </div>
+          )}
+          <button className="btn btn-primary btn-sm" onClick={() => setCreating(true)}>
+            <IconPlus style={{ width: 14, height: 14 }} /> Nuovo
+          </button>
+        </div>
+      </div>
+
+      {!loaded ? (
+        <Skeleton rows={2} height={58} style={{ marginTop: 0 }} />
+      ) : open.length === 0 ? (
+        <div className="card" style={{ padding: 16 }}>
+          <span className="muted" style={{ fontSize: 13 }}>
+            Nessun task in corso. Tocca "Nuovo" per crearne uno: scadenza, passi spuntabili e via.
+          </span>
+        </div>
+      ) : (
+        <div className="card">
+          {shown.map((t) => {
+            const steps = t.steps || [];
+            const doneN = steps.filter((s) => s.done).length;
+            const pct = steps.length ? Math.round((doneN / steps.length) * 100) : 0;
+            const late = t.due_date && t.due_date < today;
+            const secs = taskSecs[t.id] || 0;
+            const isRunning = runningTaskId === t.id;
+            const pr = PRIORITIES[t.priority] || PRIORITIES.media;
+            const proj = projectById ? projectById(t.project_id) : null;
+            return (
+              <div key={t.id} className="entry">
+                <span className="entry-dot" style={{ background: pr.color }} />
+                <div className="entry-main" onClick={() => setEditing(t)} style={{ cursor: "pointer" }}>
+                  <div className="entry-desc">{t.title}</div>
+                  <div className="entry-sub" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {filter === "all" && <span>👤 {nameOf(t.owner_id)}</span>}
+                    {steps.length > 0 && <span>{doneN}/{steps.length} passi</span>}
+                    {t.due_date && (
+                      <span style={late ? { color: "var(--stop)", fontWeight: 700 } : undefined}>
+                        {late ? "⚠️ scaduto" : "📅"} {new Date(t.due_date + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" })}
+                      </span>
+                    )}
+                    {proj && <span>{proj.name}</span>}
+                    {secs > 0 && <span>⏱ {fmtDuration(secs)}</span>}
                   </div>
+                  {steps.length > 0 && (
+                    <div className="growth-bar" style={{ marginTop: 6, height: 5 }}>
+                      <div className="growth-fill" style={{ width: `${pct}%` }} />
+                    </div>
+                  )}
+                </div>
+                {isRunning ? (
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ok)", flexShrink: 0 }}>in corso</span>
+                ) : (
+                  <button
+                    className="entry-play"
+                    onClick={(e) => { e.stopPropagation(); onStart(t); }}
+                    aria-label="Avvia timer sul task"
+                  >
+                    <IconPlay />
+                  </button>
                 )}
               </div>
-              {isRunning ? (
-                <span className="muted" style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ok)", flexShrink: 0 }}>in corso</span>
-              ) : (
-                <button className="entry-play" onClick={() => onStart(t)} aria-label="Avvia timer sul task">
-                  <IconPlay />
-                </button>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 14, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
+        {hidden > 0 && (
+          <button className="link-btn" style={{ fontSize: 12 }} onClick={() => setShowAll(true)}>
+            mostra altri {hidden}
+          </button>
+        )}
+        {showAll && open.length > 4 && (
+          <button className="link-btn" style={{ fontSize: 12 }} onClick={() => setShowAll(false)}>
+            mostra meno
+          </button>
+        )}
+        {done.length > 0 && (
+          <button className="link-btn" style={{ fontSize: 12 }} onClick={() => setShowDone((v) => !v)}>
+            🌳 completati di recente {showDone ? "▴" : "▾"}
+          </button>
+        )}
       </div>
-      <p className="muted" style={{ fontSize: 11.5, marginTop: 6 }}>
-        Li gestisci (crei, assegni, completi) in Admin → Task 🎯.
-      </p>
+
+      {showDone && done.length > 0 && (
+        <div className="card" style={{ marginTop: 8 }}>
+          {done.map((t) => (
+            <div key={t.id} className="list-action" style={{ opacity: 0.7, cursor: "pointer" }} onClick={() => setEditing(t)}>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ fontWeight: 600, display: "block", textDecoration: "line-through" }}>{t.title}</span>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  🌳 {t.completed_at ? new Date(t.completed_at).toLocaleDateString("it-IT", { day: "numeric", month: "short" }) : ""}
+                  {filter === "all" ? ` · ${nameOf(t.owner_id)}` : ""}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {creating && <TaskForm admins={admins} onClose={() => setCreating(false)} onSaved={reload} />}
+      {editing && <TaskForm task={editing} admins={admins} onClose={() => setEditing(null)} onSaved={reload} />}
     </>
   );
 }
@@ -131,13 +211,14 @@ export function RunningTaskSteps({ task, onToggle }) {
   );
 }
 
-// ---------- Coach del giorno ----------
+// ---------- Coach ----------
 
 // Prepara il riassunto (niente dati economici!) da mandare al coach.
 export function buildCoachPayload({ tasks, entries, profile, projectById, userId }) {
   const now = new Date();
   const weekStart = startOfWeek(now);
   const todayK = dayKey(now);
+  const weekAgoIso = new Date(Date.now() - 7 * 86400000).toISOString();
 
   const taskSecs = {};
   let oreOggi = 0, oreSettimana = 0;
@@ -155,7 +236,13 @@ export function buildCoachPayload({ tasks, entries, profile, projectById, userId
   }
 
   const h = (s) => Math.round((s / 3600) * 10) / 10;
-  const mine = sortByUrgency(tasks.filter((t) => t.owner_id === userId));
+  const openMine = sortByUrgency(
+    tasks.filter((t) => t.owner_id === userId && t.status !== "done")
+  );
+  const doneWeek = tasks
+    .filter((t) => t.status === "done" && (t.completed_at || "") >= weekAgoIso)
+    .map((t) => t.title)
+    .slice(0, 12);
 
   return {
     nome: (profile?.name || "").split(" ")[0] || undefined,
@@ -165,7 +252,8 @@ export function buildCoachPayload({ tasks, entries, profile, projectById, userId
     progetti_settimana: Object.entries(perProgetto)
       .sort((a, b) => b[1] - a[1]).slice(0, 4)
       .map(([nome, s]) => ({ nome, ore: h(s) })),
-    task_aperti: mine.slice(0, 8).map((t) => {
+    completati_settimana: doneWeek,
+    task_aperti: openMine.slice(0, 8).map((t) => {
       const steps = t.steps || [];
       return {
         titolo: t.title,
@@ -190,6 +278,7 @@ export function CoachCard({ tasks, entries, profile, projectById, userId }) {
     } catch { /* cache assente o corrotta */ }
     return { status: "idle" };
   });
+  const [weekly, setWeekly] = useState(null); // riepilogo settimanale on-demand
 
   const fetchAdvice = useCallback(async () => {
     setState({ status: "loading" });
@@ -209,6 +298,17 @@ export function CoachCard({ tasks, entries, profile, projectById, userId }) {
     }
   }, [tasks, entries, profile, projectById, userId]);
 
+  async function fetchWeekly() {
+    setWeekly({ status: "loading" });
+    try {
+      const payload = buildCoachPayload({ tasks, entries, profile, projectById, userId });
+      const { text } = await askCoach("weekly", payload);
+      setWeekly({ status: "done", text });
+    } catch (e) {
+      setWeekly({ status: "error", msg: coachErrorMessage(e) });
+    }
+  }
+
   // Un consiglio al giorno, in automatico (poi resta in cache locale).
   useEffect(() => {
     if (state.status !== "idle") return;
@@ -224,9 +324,12 @@ export function CoachCard({ tasks, entries, profile, projectById, userId }) {
     <div className="card coach-card">
       <div className="row-between">
         <div style={{ fontWeight: 700, fontSize: 13.5 }}>🧠 Il coach</div>
-        {state.status === "done" && (
-          <button className="link-btn" style={{ fontSize: 11.5 }} onClick={fetchAdvice}>nuovo consiglio</button>
-        )}
+        <div style={{ display: "flex", gap: 12 }}>
+          <button className="link-btn" style={{ fontSize: 11.5 }} onClick={fetchWeekly}>riepilogo settimana</button>
+          {state.status === "done" && (
+            <button className="link-btn" style={{ fontSize: 11.5 }} onClick={fetchAdvice}>nuovo consiglio</button>
+          )}
+        </div>
       </div>
       {state.status === "loading" && <div className="skel" style={{ height: 40, marginTop: 8 }} />}
       {state.status === "done" && (
@@ -238,6 +341,16 @@ export function CoachCard({ tasks, entries, profile, projectById, userId }) {
           <button className="link-btn" style={{ fontSize: 12.5 }} onClick={fetchAdvice}>riprova</button>
         </p>
       )}
+
+      <Sheet open={!!weekly} onClose={() => setWeekly(null)} title="🧠 La tua settimana">
+        {weekly?.status === "loading" && <Skeleton rows={3} height={20} />}
+        {weekly?.status === "done" && (
+          <p style={{ fontSize: 14.5, lineHeight: 1.65, margin: 0 }}>{weekly.text}</p>
+        )}
+        {weekly?.status === "error" && (
+          <p className="muted" style={{ fontSize: 13, margin: 0 }}>{weekly.msg}</p>
+        )}
+      </Sheet>
     </div>
   );
 }

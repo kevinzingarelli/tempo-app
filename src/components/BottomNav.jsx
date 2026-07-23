@@ -1,8 +1,8 @@
-import { IconTimer, IconChart, IconShield, IconStar, IconCalendar } from "../lib/icons.jsx";
+import { IconHome, IconChart, IconShield, IconStar, IconCalendar } from "../lib/icons.jsx";
 
 export default function BottomNav({ tab, setTab, isAdmin }) {
   const items = [
-    { id: "timer", label: "Timer", Icon: IconTimer },
+    { id: "timer", label: "Home", Icon: IconHome },
     { id: "stats", label: "Per te", Icon: IconStar },
     { id: "reports", label: "Report", Icon: IconChart },
     { id: "timeoff", label: "Ferie", Icon: IconCalendar },

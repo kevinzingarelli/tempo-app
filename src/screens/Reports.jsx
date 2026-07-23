@@ -48,7 +48,6 @@ export default function Reports() {
     })
     .sort((a, b) => b.secs - a.secs)
     .map((r, i) => ({ ...r, color: r.color || PALETTE[i % PALETTE.length] }));
-  const max = Math.max(1, ...rows.map((r) => r.secs));
   const sumSecs = rows.reduce((a, r) => a + r.secs, 0) || 1;
 
   // Raggruppamento "per attività": utile per task ripetitivi (es. "Check")
@@ -75,10 +74,8 @@ export default function Reports() {
   const activityRows = Object.values(byActivity)
     .sort((a, b) => b.secs - a.secs)
     .map((r, i) => ({ ...r, color: PALETTE[i % PALETTE.length] }));
-  const activityMax = Math.max(1, ...activityRows.map((r) => r.secs));
 
   const displayRows = groupBy === "project" ? rows : activityRows;
-  const displayMax = groupBy === "project" ? max : activityMax;
 
   return (
     <div className="screen">
@@ -137,7 +134,11 @@ export default function Reports() {
       ) : (
         <div className="card" style={{ padding: "10px 14px" }}>
           {displayRows.map((r) => {
-            const pct = Math.round((r.secs / sumSecs) * 100);
+            // La barra si riempie in proporzione al PESO sul totale del
+            // periodo (v32): 33% del lavoro = barra piena al 33%, col
+            // colore del progetto. Colpo d'occhio immediato.
+            const pctReal = (r.secs / sumSecs) * 100;
+            const pct = Math.round(pctReal);
             return (
               <div key={r.id || r.key} className="bar-row">
                 <span className="bar-name">
@@ -147,7 +148,7 @@ export default function Reports() {
                   )}
                 </span>
                 <span className="bar-track">
-                  <span className="bar-fill" style={{ width: `${Math.max(2, (r.secs / displayMax) * 100)}%`, background: r.color }} />
+                  <span className="bar-fill" style={{ width: `${Math.max(1.5, pctReal)}%`, background: r.color }} />
                 </span>
                 <span className="bar-val">{fmtDuration(r.secs)} · {pct}%</span>
               </div>
