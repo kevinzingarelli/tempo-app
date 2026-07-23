@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anteprima scena boschetto (solo sviluppo)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f4f6f4; margin: 0; padding: 20px; }
+    .wrap { max-width: 560px; margin: 0 auto; }
+    .frame { border-radius: 12px; overflow: hidden; border: 1px solid #d3dbd3; background: #fff; line-height: 0; }
+    .row { display: flex; gap: 8px; margin: 12px 0; flex-wrap: wrap; }
+    button { padding: 8px 12px; border-radius: 999px; border: 1px solid #d3dbd3; background: #fff; cursor: pointer; font-size: 13px; }
+    button.on { background: #2f7d4f; color: #fff; border-color: #2f7d4f; }
+    label { font-size: 13px; display: flex; align-items: center; gap: 8px; flex: 1; }
+    input[type=range] { flex: 1; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="frame" id="frame"></div>
+    <div class="row"><label>Ora <input type="range" id="h" min="0" max="24" step="0.25" value="17.5" /><span id="hv">17:30</span></label></div>
+    <div class="row" id="wxr"></div>
+    <div class="row"><label>Crescita <input type="range" id="g" min="0" max="100" value="55" /><span id="gv">55%</span></label></div>
+    <div class="row"><label>Alberi completati <input type="range" id="n" min="0" max="12" value="5" /><span id="nv">5</span></label></div>
+    <div class="row" id="mor"></div>
+  </div>
+  <script type="module">
+    import React from "react";
+    import { createRoot } from "react-dom/client";
+    import { Scene } from "/src/components/GrowthTree.jsx";
+    import "/src/index.css";
+
+    const SPECIES = [
+      { name: "ciliegio", fruit: "cherry" }, { name: "arancio", fruit: "orange" },
+      { name: "melo", fruit: "apple" }, { name: "limone", fruit: "lemon" },
+      { name: "susino", fruit: "plum" }, { name: "pesco", fruit: "peach" },
+    ];
+    const state = { h: 17.5, kind: "sereno", g: 0.55, n: 5, month: 6 };
+    const root = createRoot(document.getElementById("frame"));
+    function draw() {
+      const stage = Math.min(8, Math.floor(state.g * 40 / 5));
+      root.render(React.createElement(Scene, {
+        hourNow: state.h,
+        wx: { kind: state.kind, sunrise: 6.05, sunset: 20.8 },
+        month: state.month,
+        growth: state.g,
+        treesGrown: state.n,
+        currentSpecies: SPECIES[state.n % 6],
+        stageIndex: stage,
+      }));
+    }
+    const $ = (id) => document.getElementById(id);
+    $("h").oninput = (e) => { state.h = +e.target.value; $("hv").textContent = String(Math.floor(state.h)).padStart(2, "0") + ":" + String(Math.round(state.h % 1 * 60)).padStart(2, "0"); draw(); };
+    $("g").oninput = (e) => { state.g = +e.target.value / 100; $("gv").textContent = e.target.value + "%"; draw(); };
+    $("n").oninput = (e) => { state.n = +e.target.value; $("nv").textContent = e.target.value; draw(); };
+    for (const k of ["sereno", "nuvoloso", "pioggia", "neve"]) {
+      const b = document.createElement("button");
+      b.textContent = k; b.id = "wx-" + k;
+      b.onclick = () => { state.kind = k; sel(); draw(); };
+      $("wxr").appendChild(b);
+    }
+    const MESI = [["estate (girasoli)", 6], ["autunno (zucche)", 9], ["inverno (bucaneve)", 0], ["primavera (tulipani)", 3]];
+    for (const [lbl, m] of MESI) {
+      const b = document.createElement("button");
+      b.textContent = lbl; b.dataset.m = m;
+      b.onclick = () => { state.month = m; sel(); draw(); };
+      $("mor").appendChild(b);
+    }
+    function sel() {
+      document.querySelectorAll("#wxr button").forEach((b) => b.classList.toggle("on", b.id === "wx-" + state.kind));
+      document.querySelectorAll("#mor button").forEach((b) => b.classList.toggle("on", +b.dataset.m === state.month));
+    }
+    sel(); draw();
+  </script>
+</body>
+</html>

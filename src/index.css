@@ -1696,3 +1696,44 @@ img { -webkit-user-drag: none; user-select: none; }
   margin-right: 8px;
   white-space: nowrap;
 }
+
+/* ============ Scena del boschetto (v33) ============ */
+/* Vento: ogni albero ondeggia con durata e sfasatura proprie */
+.bsc-sway {
+  animation: bsc-sy 5s ease-in-out infinite alternate;
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+@keyframes bsc-sy {
+  from { transform: rotate(-0.8deg); }
+  to { transform: rotate(1deg); }
+}
+/* Nuvole che attraversano il cielo */
+.bsc-drift { animation: bsc-dr linear infinite; }
+@keyframes bsc-dr {
+  from { transform: translateX(-200px); }
+  to { transform: translateX(900px); }
+}
+/* Uccellini di passaggio (solo col sereno) */
+.bsc-fly { animation: bsc-fl 17s linear infinite; }
+@keyframes bsc-fl {
+  from { transform: translate(-70px, 10px); }
+  to { transform: translate(770px, -26px); }
+}
+/* Pioggia e neve */
+.bsc-rain { animation: bsc-ra 0.7s linear infinite; }
+@keyframes bsc-ra {
+  from { transform: translateY(-30px); }
+  to { transform: translateY(250px); }
+}
+.bsc-snow { animation: bsc-sn 4.5s linear infinite; }
+@keyframes bsc-sn {
+  from { transform: translate(0, -30px); }
+  50% { transform: translate(8px, 110px); }
+  to { transform: translate(-4px, 250px); }
+}
+/* Testa dei girasoli: ruota dolcemente verso il sole */
+.bsc-sfh { transition: transform 1.2s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .bsc-sway, .bsc-drift, .bsc-fly, .bsc-rain, .bsc-snow { animation: none; }
+}

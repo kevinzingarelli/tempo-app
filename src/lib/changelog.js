@@ -2,10 +2,24 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "32";
+export const CURRENT_VERSION = "33";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "33",
+    date: "2026-07-23",
+    time: "17:30",
+    title: "Il boschetto prende vita",
+    items: [
+      "Il boschetto è diventato un paesaggio vivo: il sole nella scena segue quello vero, con gli orari reali di alba e tramonto",
+      "Il meteo è quello vero della città: se fuori piove, piove anche nel boschetto — e d'inverno nevica ❄️",
+      "Fiori di stagione: adesso i girasoli, che durante il giorno si girano seguendo il sole; poi zucche in autunno, bucaneve d'inverno e tulipani in primavera",
+      "Ogni albero completato è unico, con la sua specie e il suo frutto: ciliegie, arance, mele, limoni, susine, pesche",
+      "Uccellini di passaggio quando è sereno, nuvole che attraversano il cielo, stelle e luna di notte",
+    ],
+    adminItems: [],
+  },
   {
     version: "32",
     date: "2026-07-23",
