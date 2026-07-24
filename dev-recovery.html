@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anteprima recupero timer (solo sviluppo)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f4f6f4; margin: 0; padding: 20px; }
+    .wrap { max-width: 560px; margin: 0 auto; }
+    /* sopra il pannello, che è a schermo intero */
+    .row { display: flex; gap: 8px; margin: 0 0 12px; flex-wrap: wrap; position: relative; z-index: 9999; }
+    #log { position: relative; z-index: 9999; }
+    button.dev { padding: 8px 12px; border-radius: 999px; border: 1px solid #d3dbd3; background: #fff; cursor: pointer; font-size: 13px; }
+    button.dev.on { background: #2f7d4f; color: #fff; border-color: #2f7d4f; }
+    #log { font-size: 13px; color: #565f58; min-height: 20px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="row" id="cases"></div>
+    <div id="log"></div>
+    <div id="root"></div>
+  </div>
+  <script type="module">
+    import React from "react";
+    import { createRoot } from "react-dom/client";
+    import { RecoverySheet } from "/src/components/TimerRecovery.jsx";
+    import "/src/index.css";
+
+    const PROJ = { p1: { id: "p1", name: "Sviluppo Aziendale", color: "#e5a300" }, p2: { id: "p2", name: "Commerciale", color: "#2f7d4f" } };
+    const projectById = (id) => PROJ[id] || null;
+    const h = (n) => n * 3600 * 1000;
+
+    // Casi realistici: sera dimenticata, pausa pranzo, due timer in parallelo,
+    // timer avviato altrove (nessuna proposta "quando ho smesso")
+    const CASES = {
+      "Sera dimenticata (14h)": () => ({
+        seen: Date.now() - h(14),
+        entries: [{ id: "a", description: "Migliorare app tempo", project_id: "p1", started_at: new Date(Date.now() - h(15)).toISOString() }],
+      }),
+      "Pausa pranzo (2h)": () => ({
+        seen: Date.now() - h(2),
+        entries: [{ id: "b", description: "", project_id: "p2", started_at: new Date(Date.now() - h(4)).toISOString() }],
+      }),
+      "Due in parallelo": () => ({
+        seen: Date.now() - h(11),
+        entries: [
+          { id: "c", description: "Offerta cliente", project_id: "p2", started_at: new Date(Date.now() - h(12)).toISOString() },
+          { id: "d", description: "Riunione", project_id: "p1", started_at: new Date(Date.now() - h(12.5)).toISOString() },
+        ],
+      }),
+      "Avviato altrove": () => ({
+        seen: Date.now() - h(20),
+        entries: [{ id: "e", description: "Sito Ombretta", project_id: "p1", started_at: new Date(Date.now() - h(3)).toISOString() }],
+      }),
+    };
+
+    const root = createRoot(document.getElementById("root"));
+    const log = (t) => { document.getElementById("log").textContent = "→ " + t; };
+    let current = Object.keys(CASES)[0];
+
+    function draw() {
+      const { entries, seen } = CASES[current]();
+      root.render(React.createElement(RecoverySheet, {
+        entries, seen, busy: false, projectById,
+        onKeep: () => log("continua (timer lasciato in corso)"),
+        onStopAtSeen: () => log("chiuso all'ora in cui ho lasciato l'app"),
+        onStopNow: () => log("fermato adesso"),
+        onRemove: () => log("voce eliminata"),
+      }));
+      document.querySelectorAll("#cases button").forEach((b) => b.classList.toggle("on", b.textContent === current));
+    }
+    for (const name of Object.keys(CASES)) {
+      const b = document.createElement("button");
+      b.className = "dev"; b.textContent = name;
+      b.onclick = () => { current = name; log(""); draw(); };
+      document.getElementById("cases").appendChild(b);
+    }
+    window.setCase = (name) => { current = name; log(""); draw(); };
+    draw();
+  </script>
+</body>
+</html>

@@ -2,10 +2,23 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "35";
+export const CURRENT_VERSION = "36";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "36",
+    date: "2026-07-23",
+    time: "20:10",
+    title: "Il timer dimenticato non ti frega più",
+    items: [
+      "Se chiudi l'app col timer acceso — la sera, a pranzo, per sbaglio — al ritorno l'app se ne accorge e ti chiede cosa fare",
+      "La scorciatoia utile: “Chiudi a quando ho smesso” mette lo stop all'ora in cui avevi lasciato l'app, senza dover correggere gli orari a mano",
+      "Puoi anche continuare, fermare adesso o cancellare la voce: decidi tu, l'app non tocca niente da sola",
+      "Te lo chiede solo dopo mezz'ora o più di assenza, e mai due volte per lo stesso timer",
+    ],
+    adminItems: [],
+  },
   {
     version: "35",
     date: "2026-07-23",
