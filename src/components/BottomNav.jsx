@@ -19,7 +19,12 @@ export default function BottomNav({ tab, setTab, isAdmin }) {
         <button
           key={id}
           className={"nav-btn" + (tab === id ? " active" : "")}
-          onClick={() => setTab(id)}
+          onClick={() => {
+            // Tocco sulla scheda già attiva = torna in cima (dolcemente);
+            // cambio scheda = si riparte comunque dall'alto (v38).
+            if (tab === id) window.scrollTo({ top: 0, behavior: "smooth" });
+            else { setTab(id); window.scrollTo({ top: 0 }); }
+          }}
         >
           <Icon />
           {label}

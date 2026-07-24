@@ -1737,3 +1737,7 @@ img { -webkit-user-drag: none; user-select: none; }
 @media (prefers-reduced-motion: reduce) {
   .bsc-sway, .bsc-drift, .bsc-fly, .bsc-rain, .bsc-snow { animation: none; }
 }
+
+/* ============ Righe task in stile lista (v38) ============ */
+.task-row { border-bottom: 1px solid var(--line); }
+.task-row:last-child { border-bottom: none; }

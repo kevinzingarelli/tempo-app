@@ -177,6 +177,13 @@ export function TaskQuickList({ tasks, admins, userId, onStart, runningTaskId, t
   const commercial = open.filter((t) => t.category === "commerciale");
   const others = open.filter((t) => t.category !== "commerciale");
 
+  // Etichette compatte in stile Notion (v38): piccole, rettangolo morbido
+  const pill = (extra = {}) => ({
+    fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 5,
+    background: "rgba(39,38,77,0.06)", color: "var(--ink-soft)",
+    whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 4, ...extra,
+  });
+
   const renderCard = (t) => {
     const isDone = !!justDone[t.id] && t.status === "done";
     const isCollapsed = collapsed.has(t.id) && !isDone;
@@ -190,29 +197,29 @@ export function TaskQuickList({ tasks, admins, userId, onStart, runningTaskId, t
     const proj = projectById(t.project_id);
     const client = t.client_id ? clientById(t.client_id) : proj?.client_id ? clientById(proj.client_id) : null;
     return (
-      <div key={t.id} className="card" style={{ padding: "12px 14px", marginBottom: 10, opacity: isDone ? 0.75 : 1 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+      <div key={t.id} className="task-row" style={{ padding: "11px 14px", opacity: isDone ? 0.7 : 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <input
             type="checkbox"
             checked={isDone}
             onChange={() => (isDone ? undoComplete(t) : completeTask(t))}
             aria-label={isDone ? "Annulla completamento" : "Completa il task"}
-            style={{ width: 22, height: 22, accentColor: "var(--brand)", flexShrink: 0, cursor: "pointer" }}
+            style={{ width: 20, height: 20, accentColor: "var(--brand)", flexShrink: 0, cursor: "pointer" }}
           />
           <div
             style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
             onClick={() => setEditing(t)}
           >
-            <div style={{ fontWeight: 700, fontSize: 14.5, textDecoration: isDone ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ fontWeight: 600, fontSize: 14, textDecoration: isDone ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
               {t.title}
-            </div>
+            </span>
           </div>
           {isRunning ? (
             <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ok)", flexShrink: 0 }}>in corso</span>
           ) : (
             !isDone && (
-              <button className="entry-play" onClick={() => onStart(t)} aria-label="Avvia timer sul task">
-                <IconPlay />
+              <button className="entry-play" style={{ width: 30, height: 30 }} onClick={() => onStart(t)} aria-label="Avvia timer sul task">
+                <IconPlay style={{ width: 13, height: 13 }} />
               </button>
             )
           )}
@@ -226,7 +233,7 @@ export function TaskQuickList({ tasks, admins, userId, onStart, runningTaskId, t
         </div>
 
         {isDone && (
-          <div style={{ marginLeft: 33, marginTop: 6, fontSize: 12.5 }}>
+          <div style={{ marginLeft: 30, marginTop: 6, fontSize: 12.5 }}>
             🌸 Completato ·{" "}
             <button className="link-btn" style={{ fontSize: 12.5 }} onClick={() => undoComplete(t)}>Annulla</button>
           </div>
@@ -234,28 +241,32 @@ export function TaskQuickList({ tasks, admins, userId, onStart, runningTaskId, t
 
         {!isDone && (
           <>
-            <div className="muted" style={{ fontSize: 12, marginTop: 5, marginLeft: 33, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ color: pr.color, background: pr.bg, fontWeight: 700, padding: "1px 8px", borderRadius: 999, fontSize: 11 }}>{pr.label}</span>
-              {filter === "all" && <span>👤 {nameOf(t.owner_id)}</span>}
+            {/* proprietà come etichette compatte, alla Notion */}
+            <div style={{ marginTop: 6, marginLeft: 30, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={pill({ color: pr.color, background: pr.bg })}>{pr.label}</span>
               {t.due_date && (
-                <span style={late ? { color: "var(--stop)", fontWeight: 700 } : undefined}>
-                  {late ? "⚠️ scaduto" : "📅"} {new Date(t.due_date + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" })}
+                <span style={pill(late ? { color: "var(--stop)", background: "rgba(224,66,75,0.1)" } : {})}>
+                  {late ? "⚠️" : "📅"} {new Date(t.due_date + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" })}
                 </span>
               )}
               {(proj || client) && (
-                <span>{proj ? proj.name : ""}{client ? (proj ? ` (${client.name})` : client.name) : ""}</span>
+                <span style={pill()}>
+                  {proj ? proj.name : ""}{client ? (proj ? ` · ${client.name}` : client.name) : ""}
+                </span>
               )}
-              {secs > 0 && <span>⏱ {fmtDuration(secs)}</span>}
+              {steps.length > 0 && <span style={pill()}>{doneN}/{steps.length} passi</span>}
+              {secs > 0 && <span style={pill()}>⏱ {fmtDuration(secs)}</span>}
+              {filter === "all" && <span style={pill()}>👤 {nameOf(t.owner_id)}</span>}
             </div>
 
             {steps.length > 0 && (
-              <div className="growth-bar" style={{ marginTop: 8, marginLeft: 33, height: 5 }}>
+              <div className="growth-bar" style={{ marginTop: 8, marginLeft: 30, height: 3 }}>
                 <div className="growth-fill" style={{ width: `${pct}%` }} />
               </div>
             )}
 
             {!isCollapsed && (
-              <div style={{ marginLeft: 33 }}>
+              <div style={{ marginLeft: 30 }}>
                 {steps.length > 0 && (
                   <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 7 }}>
                     {steps.map((s) => (
@@ -264,7 +275,7 @@ export function TaskQuickList({ tasks, admins, userId, onStart, runningTaskId, t
                           type="checkbox"
                           checked={!!s.done}
                           onChange={() => toggleStep(t, s.id)}
-                          style={{ width: 17, height: 17, accentColor: "var(--brand)", flexShrink: 0, cursor: "pointer" }}
+                          style={{ width: 16, height: 16, accentColor: "var(--brand)", flexShrink: 0, cursor: "pointer" }}
                         />
                         <span style={{ textDecoration: s.done ? "line-through" : "none", opacity: s.done ? 0.55 : 1 }}>
                           {s.text}
@@ -283,9 +294,9 @@ export function TaskQuickList({ tasks, admins, userId, onStart, runningTaskId, t
   };
 
   const sectionHeader = (key, count) => (
-    <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "16px 0 8px", fontSize: 12.5, fontWeight: 700, color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "16px 0 6px", fontSize: 12, fontWeight: 700, color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
       <span>{CATEGORIES[key].emoji} {CATEGORIES[key].plural}</span>
-      <span style={{ fontWeight: 500, color: "var(--ink-faint)" }}>({count})</span>
+      <span style={{ fontWeight: 500, color: "var(--ink-faint)" }}>{count}</span>
     </div>
   );
 
@@ -319,13 +330,13 @@ export function TaskQuickList({ tasks, admins, userId, onStart, runningTaskId, t
           {commercial.length > 0 && (
             <>
               {sectionHeader("commerciale", commercial.length)}
-              {commercial.map(renderCard)}
+              <div className="card">{commercial.map(renderCard)}</div>
             </>
           )}
           {others.length > 0 && (
             <>
               {sectionHeader("generale", others.length)}
-              {others.map(renderCard)}
+              <div className="card">{others.map(renderCard)}</div>
             </>
           )}
         </>

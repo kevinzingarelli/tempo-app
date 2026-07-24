@@ -248,6 +248,64 @@ function SeasonFlowers({ month, sunX, sunY, night }) {
   ));
 }
 
+// ---------- pezzi del paesaggio (v38: ispirato alle colline vere di Vasto) ----------
+
+// Cipresso: la "fiamma" scura tipica delle colline
+function Cypress({ x, baseY, h, fill = "#2b4a2e", sway = false }) {
+  const w = h * 0.16;
+  const el = (
+    <g>
+      <ellipse cx={x} cy={baseY} rx={w * 1.1} ry="1.8" fill="#12301e" opacity="0.2" />
+      <path
+        d={`M${x},${baseY - h} C${x + w * 0.9},${baseY - h * 0.72} ${x + w},${baseY - h * 0.3} ${x + w * 0.35},${baseY - h * 0.04}
+            L${x - w * 0.35},${baseY - h * 0.04} C${x - w},${baseY - h * 0.3} ${x - w * 0.9},${baseY - h * 0.72} ${x},${baseY - h} Z`}
+        fill={fill}
+      />
+      <path
+        d={`M${x - w * 0.1},${baseY - h * 0.88} C${x - w * 0.55},${baseY - h * 0.6} ${x - w * 0.5},${baseY - h * 0.3} ${x - w * 0.2},${baseY - h * 0.08}`}
+        stroke="#1d3520" strokeWidth={(w * 0.22).toFixed(1)} fill="none" opacity="0.45"
+      />
+    </g>
+  );
+  return sway ? <g className="bsc-sway" style={{ animationDuration: "7s" }}>{el}</g> : el;
+}
+
+// Casale in pietra sul crinale (l'omaggio alla villa delle foto)
+function Farmhouse({ x, y }) {
+  return (
+    <g opacity="0.92">
+      <rect x={x - 11} y={y - 8} width="22" height="9" fill="#cfc0a2" />
+      <path d={`M${x - 13},${y - 8} L${x},${y - 14} L${x + 13},${y - 8} Z`} fill="#a5624a" />
+      <rect x={x - 3.5} y={y - 5.5} width="4" height="6.5" fill="#5c4a38" />
+      <rect x={x + 5} y={y - 6} width="3" height="3" fill="#7a6a52" />
+    </g>
+  );
+}
+
+// Macchia boschiva: tante chiome sovrapposte (il bosco fitto delle foto).
+// Due passate: dietro scura, davanti media con qualche punta di luce.
+function Woodland({ seed, y0, amp, x0 = 0, x1 = 680, nBack = 34, nFront = 26, dark, mid, lite, s = 1, mass = true }) {
+  const r = R(seed);
+  const back = [], front = [];
+  for (let i = 0; i < nBack; i++) back.push({ x: x0 + r() * (x1 - x0), y: y0 + r() * amp, rx: (8 + r() * 8) * s, ry: (6 + r() * 5) * s });
+  for (let i = 0; i < nFront; i++) front.push({ x: x0 + r() * (x1 - x0), y: y0 + 3 + r() * amp, rx: (6 + r() * 7) * s, ry: (5 + r() * 4) * s, l: r() > 0.62 });
+  return (
+    <g>
+      {/* la "massa" continua sotto le chiome: senza, il bosco sembrava
+          fatto di cespugli volanti staccati tra loro */}
+      {mass && (
+        <ellipse
+          cx={((x0 + x1) / 2).toFixed(0)} cy={(y0 + amp * 0.7).toFixed(0)}
+          rx={((x1 - x0) / 2).toFixed(0)} ry={(amp * 0.6 + 4 * s).toFixed(0)}
+          fill={dark}
+        />
+      )}
+      {back.map((b, i) => <ellipse key={"b" + i} cx={b.x.toFixed(0)} cy={b.y.toFixed(0)} rx={b.rx.toFixed(0)} ry={b.ry.toFixed(0)} fill={dark} />)}
+      {front.map((b, i) => <ellipse key={"f" + i} cx={b.x.toFixed(0)} cy={b.y.toFixed(0)} rx={b.rx.toFixed(0)} ry={b.ry.toFixed(0)} fill={b.l ? lite : mid} />)}
+    </g>
+  );
+}
+
 // ---------- LA SCENA ----------
 // (esportata anche da sola: usata dalla pagina di anteprima locale dev-scene.html)
 export function Scene({ hourNow, wx, month, growth, treesGrown, currentSpecies, stageIndex, bloomCount = 0 }) {
@@ -262,6 +320,23 @@ export function Scene({ hourNow, wx, month, growth, treesGrown, currentSpecies, 
   const sunX = 50 + 580 * tc;
   const sunY = 200 - 162 * Math.sin(Math.PI * tc);
   const warm = day ? Math.sin(Math.PI * t) : 0;
+
+  // Palette del paesaggio (v38, dalle foto delle colline di Vasto):
+  // grano mietuto ocra, boschi fitti, prato verde del giardino.
+  // Col maltempo tutto vira verso il grigio (mix2 + gray).
+  const wheat = mix2("#d7bd85", "#b6ad9c", gray);
+  const wheatDark = mix2("#bda06a", "#a29a8c", gray);
+  const greenField = mix2("#a8b878", "#9aa694", gray);
+  const woodDark = mix2("#30592f", "#4c6656", gray);
+  const woodMid = mix2("#47773c", "#5d7663", gray);
+  const woodLite = mix2("#5c9048", "#6d8672", gray);
+  const meadow1 = mix2("#6aa055", "#7d9880", gray);
+  const meadow2 = mix2("#457a41", "#5c7a64", gray);
+  const cyp = mix2("#2b4a2e", "#44584a", gray);
+  // il crinale lontano è velato dalla foschia (prospettiva aerea)
+  const farBase = mix2(mix("#dbc794", "#d9e4ea", 0.38), "#b8b8b4", gray);
+  const farDark = mix2(mix("#c9b27c", "#d0dde4", 0.38), "#a8a8a4", gray);
+  const farWood = mix2(mix("#3f6b3c", "#c3d2da", 0.45), "#8a948e", gray);
 
   // stelle (fisse, seedate)
   const stars = [];
@@ -292,7 +367,7 @@ export function Scene({ hourNow, wx, month, growth, treesGrown, currentSpecies, 
     const r = R(i * 37 + 11);
     let bx = 20 + r() * 640;
     if (bx > 290 && bx < 420) bx = bx < 355 ? bx - 150 : bx + 140; // il centro è dell'albero protagonista
-    blooms.push({ x: bx, y: 231 + r() * 19, c: BLOOM_COLORS[i % BLOOM_COLORS.length], s: 0.75 + r() * 0.5 });
+    blooms.push({ x: bx, y: 240 + r() * 16, c: BLOOM_COLORS[i % BLOOM_COLORS.length], s: 0.75 + r() * 0.5 });
   }
   const patches = [];
   const nPatches = Math.min(8, Math.floor(Math.max(0, bloomCount - 40) / 10));
@@ -304,14 +379,15 @@ export function Scene({ hourNow, wx, month, growth, treesGrown, currentSpecies, 
     for (let k = 0; k < 9; k++) {
       dots.push({ dx: (r() - 0.5) * 30, dy: (r() - 0.5) * 8, c: BLOOM_COLORS[Math.floor(r() * 5)] });
     }
-    patches.push({ x: px, y: 236 + r() * 12, dots });
+    patches.push({ x: px, y: 243 + r() * 10, dots });
   }
 
-  // il bosco: posizioni fisse, alberi unici per seed/specie
+  // il frutteto: posizioni fisse sul campo di mezzo, alberi unici
+  // per seed/specie (come il frutteto della villa nelle foto)
   const slots = [
-    [118, 196, 60], [238, 188, 50], [558, 192, 66], [452, 186, 44],
-    [66, 190, 46], [630, 186, 52], [306, 184, 42], [176, 186, 40],
-    [512, 184, 38], [386, 182, 36], [90, 172, 32], [598, 170, 34],
+    [118, 216, 50], [238, 210, 42], [558, 214, 54], [452, 208, 40],
+    [66, 212, 42], [630, 208, 44], [306, 206, 36], [176, 207, 38],
+    [512, 205, 34], [386, 203, 32], [86, 200, 28], [598, 198, 30],
   ];
   const shown = Math.min(treesGrown, slots.length);
 
@@ -329,14 +405,14 @@ export function Scene({ hourNow, wx, month, growth, treesGrown, currentSpecies, 
         <linearGradient id="bsc-trunk" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="#4e3319" /><stop offset="45%" stopColor="#8a5f38" /><stop offset="100%" stopColor="#3c2812" />
         </linearGradient>
-        <linearGradient id="bsc-h1" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={mix2("#9dbf92", "#b8c9c2", gray + (1 - warm) * 0.3)} /><stop offset="100%" stopColor={mix2("#7ba377", "#9aa9a0", gray)} />
+        <linearGradient id="bsc-rA" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={farBase} /><stop offset="100%" stopColor={farDark} />
         </linearGradient>
-        <linearGradient id="bsc-h2" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={mix2("#6f9e66", "#8a9c8c", gray)} /><stop offset="100%" stopColor={mix2("#4f7f4f", "#6a8070", gray)} />
+        <linearGradient id="bsc-rC" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={wheat} /><stop offset="100%" stopColor={wheatDark} />
         </linearGradient>
-        <linearGradient id="bsc-h3" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={mix2("#3f7a46", "#5c7562", gray)} /><stop offset="100%" stopColor={mix2("#2c5c36", "#465c4c", gray)} />
+        <linearGradient id="bsc-mw" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={meadow1} /><stop offset="100%" stopColor={meadow2} />
         </linearGradient>
       </defs>
 
@@ -353,22 +429,59 @@ export function Scene({ hourNow, wx, month, growth, treesGrown, currentSpecies, 
       {clouds.map((c, i) => (
         <g key={i} className="bsc-drift" style={{ animationDuration: `${c.dur.toFixed(0)}s`, animationDelay: `-${(c.delay * c.dur).toFixed(0)}s` }} opacity={kind === "sereno" ? 0.7 : 0.95}>
           <g transform={`translate(0,${c.y.toFixed(0)}) scale(${c.sc.toFixed(2)})`}>
-            <ellipse cx="0" cy="0" rx="34" ry="12" fill={cloudFill} />
-            <ellipse cx="24" cy="-7" rx="22" ry="10" fill={cloudFill} />
-            <ellipse cx="-26" cy="-4" rx="20" ry="9" fill={cloudFill} />
+            {/* cumulo "gonfio" come nelle giornate estive: base larga e piatta,
+                torri di vapore sopra */}
+            <ellipse cx="0" cy="2" rx="42" ry="9" fill={cloudFill} />
+            <ellipse cx="-22" cy="-4" rx="20" ry="10" fill={cloudFill} />
+            <ellipse cx="4" cy="-10" rx="18" ry="11" fill={cloudFill} />
+            <ellipse cx="26" cy="-4" rx="19" ry="9" fill={cloudFill} />
+            <ellipse cx="-4" cy="-2" rx="24" ry="11" fill={cloudFill} />
           </g>
         </g>
       ))}
 
-      <path d="M0,158 Q170,124 340,146 T680,134 V260 H0 Z" fill="url(#bsc-h1)" />
-      <path d="M0,190 Q210,158 420,180 T680,172 V260 H0 Z" fill="url(#bsc-h2)" />
+      {/* CRINALE LONTANO: campi nella foschia, con la sua linea di bosco */}
+      <path d="M0,128 Q170,112 340,122 T680,114 V260 H0 Z" fill="url(#bsc-rA)" />
+      <Woodland seed={71} y0={117} amp={9} nBack={26} nFront={14} s={0.5} mass={false} dark={farWood} mid={farWood} lite={farWood} />
 
-      {/* Gli alberi completati: ognuno con la SUA specie e forma */}
+      {/* COLLINA DI MEZZO: il bosco fitto che domina i versanti, campi ai
+          lati, il casale in pietra e il filare di lavanda */}
+      <path d="M0,158 Q160,140 330,152 T680,144 V260 H0 Z" fill={wheat} />
+      <g transform="rotate(-3 80 162)"><ellipse cx="80" cy="162" rx="92" ry="16" fill={wheatDark} opacity="0.55" /></g>
+      <path d="M4,168 Q80,158 160,164 M0,175 Q84,164 168,171" stroke={mix2("#a8905c", "#98917f", gray)} strokeWidth="1" fill="none" opacity="0.4" />
+      <Farmhouse x={152} y={150} />
+      <Cypress x={136} baseY={151} h={17} fill={cyp} />
+      <Woodland seed={23} y0={148} amp={34} x0={175} x1={545} nBack={58} nFront={44} s={0.85} dark={woodDark} mid={woodMid} lite={woodLite} />
+      <Woodland seed={51} y0={154} amp={24} x0={-30} x1={150} nBack={22} nFront={14} s={0.8} dark={woodDark} mid={woodMid} lite={woodLite} />
+      {/* lavanda in fiore sul crinale a destra (come nella foto) */}
+      <g transform="rotate(-2 600 155)">
+        <ellipse cx="600" cy="155" rx="46" ry="5.5" fill={mix2("#9a86c4", "#8f8a9c", gray)} opacity="0.5" />
+        <path d="M560,153 Q600,149 642,151 M562,156 Q600,152 644,155 M564,159 Q602,156 642,158" stroke={mix2("#7d68a8", "#7a7688", gray)} strokeWidth="1" fill="none" opacity="0.55" />
+      </g>
+      <Cypress x={566} baseY={150} h={18} fill={cyp} />
+      <Cypress x={582} baseY={152} h={14} fill={cyp} />
+
+      {/* CAMPO GRANDE: il grano mietuto color ocra, coi solchi dell'aratura */}
+      <path d="M0,200 Q200,184 430,196 T680,188 V260 H0 Z" fill="url(#bsc-rC)" />
+      {[0, 1, 2, 3, 4].map((i) => (
+        <path
+          key={"fr" + i}
+          d={`M0,${206 + i * 7} Q200,${190 + i * 7} 430,${202 + i * 7} T680,${194 + i * 7}`}
+          stroke={mix2("#b3945c", "#9c957f", gray)} strokeWidth="1.1" fill="none" opacity="0.32"
+        />
+      ))}
+      <g transform="rotate(2 90 214)"><ellipse cx="90" cy="214" rx="80" ry="13" fill={greenField} opacity="0.5" /></g>
+
+      {/* IL FRUTTETO: gli alberi completati, ognuno con la SUA specie */}
       {slots.slice(0, shown).map(([x, y, h], i) => (
         <FruitTree key={i} x={x} baseY={y} h={h} seed={i * 13 + 3} species={SPECIES[i % SPECIES.length]} />
       ))}
 
-      <path d="M0,224 Q220,198 460,216 T680,208 V260 H0 Z" fill="url(#bsc-h3)" />
+      {/* GIARDINO in primo piano: il prato verde di casa coi tre cipressi */}
+      <path d="M0,238 Q220,226 460,234 T680,228 V260 H0 Z" fill="url(#bsc-mw)" />
+      <Cypress x={264} baseY={244} h={46} fill={cyp} sway />
+      <Cypress x={284} baseY={246} h={56} fill={cyp} sway />
+      <Cypress x={302} baseY={243} h={40} fill={cyp} sway />
 
       {/* Il prato dei task completati: un fiore per ogni task chiuso */}
       {patches.map((p, i) => (

@@ -2,10 +2,23 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "37";
+export const CURRENT_VERSION = "38";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "38",
+    date: "2026-07-24",
+    time: "16:10",
+    title: "Le colline di casa e task più ordinati",
+    items: [
+      "Il boschetto ora somiglia alle colline vere attorno a Vasto: campi di grano mietuti, boschi fitti sui versanti, i cipressi, il casale in pietra e perfino il filare di lavanda",
+      "Tocca di nuovo la scheda in cui ti trovi (es. Home) e la pagina risale dolcemente in cima",
+    ],
+    adminItems: [
+      "Task riorganizzati: righe pulite in un'unica lista per sezione, con priorità, scadenza, cliente e ore come etichette compatte — più ordine, stesse funzioni",
+    ],
+  },
   {
     version: "37",
     date: "2026-07-23",
