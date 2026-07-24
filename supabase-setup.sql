@@ -649,3 +649,12 @@ alter table public.admin_tasks
 
 alter table public.admin_tasks
   add column if not exists diary jsonb not null default '[]'::jsonb;
+
+-- ============================================================
+--  v37 — Categoria del task (commerciale / generale)
+--  Divide i task in due famiglie: quelli commerciali restano sempre in
+--  cima, così non si perdono di vista. Colonna nullabile con default:
+--  i task esistenti diventano "generale". Nessun dato toccato.
+-- ============================================================
+alter table public.admin_tasks
+  add column if not exists category text not null default 'generale';

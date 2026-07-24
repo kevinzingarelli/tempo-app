@@ -16,6 +16,14 @@ export const PRIORITIES = {
   bassa: { label: "Bassa", color: "var(--ok)", bg: "rgba(47,125,79,0.13)", order: 2 },
 };
 
+// Due famiglie di task (v37): quelli commerciali stanno in una sezione a
+// parte, sempre in cima, così non ti scordi mai il lavoro sul fronte
+// vendite. Tutto il resto finisce in "Generale".
+export const CATEGORIES = {
+  commerciale: { label: "Commerciale", emoji: "💼", plural: "Commerciali" },
+  generale: { label: "Generale", emoji: "🗂️", plural: "Altri task" },
+};
+
 export default function TaskForm({ task, admins, onClose, onSaved }) {
   const { user } = useAuth();
   const { toast, activeProjects, clients } = useData();
@@ -24,6 +32,7 @@ export default function TaskForm({ task, admins, onClose, onSaved }) {
   const [notes, setNotes] = useState(task?.notes || "");
   const [ownerId, setOwnerId] = useState(task?.owner_id || user.id);
   const [priority, setPriority] = useState(task?.priority || "media");
+  const [category, setCategory] = useState(task?.category || "generale");
   const [dueDate, setDueDate] = useState(task?.due_date || "");
   const [projectId, setProjectId] = useState(task?.project_id || "");
   // cliente: esplicito sul task, o dedotto dal progetto già collegato
@@ -76,6 +85,7 @@ export default function TaskForm({ task, admins, onClose, onSaved }) {
       notes: notes.trim() || null,
       owner_id: ownerId,
       priority,
+      category,
       due_date: dueDate || null,
       client_id: clientId || null,
       project_id: projectId || null,
@@ -171,6 +181,15 @@ export default function TaskForm({ task, admins, onClose, onSaved }) {
         <div className="segment">
           {Object.entries(PRIORITIES).map(([k, p]) => (
             <button key={k} className={priority === k ? "active" : ""} onClick={() => setPriority(k)}>{p.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div className="sheet-row">
+        <label className="field-label">Tipo di task</label>
+        <div className="segment">
+          {Object.entries(CATEGORIES).map(([k, c]) => (
+            <button key={k} className={category === k ? "active" : ""} onClick={() => setCategory(k)}>{c.emoji} {c.label}</button>
           ))}
         </div>
       </div>

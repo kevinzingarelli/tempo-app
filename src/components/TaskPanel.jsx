@@ -5,7 +5,7 @@ import { entrySeconds, fmtDuration, startOfWeek, dayKey } from "../lib/format.js
 import { IconPlay, IconPlus } from "../lib/icons.jsx";
 import Sheet from "./Sheet.jsx";
 import Skeleton from "./Skeleton.jsx";
-import TaskForm, { PRIORITIES } from "./admin/TaskForm.jsx";
+import TaskForm, { PRIORITIES, CATEGORIES } from "./admin/TaskForm.jsx";
 import { askCoach, coachErrorMessage, COACH_NOT_CONFIGURED } from "../lib/coach.js";
 
 // ============================================================
@@ -173,6 +173,122 @@ export function TaskQuickList({ tasks, admins, userId, onStart, runningTaskId, t
   const nameOf = (id) => (admins.find((a) => a.id === id)?.name || "—").split(" ")[0];
   const today = isoToday();
 
+  // Due gruppi (v37): commerciali sempre in cima, poi tutto il resto.
+  const commercial = open.filter((t) => t.category === "commerciale");
+  const others = open.filter((t) => t.category !== "commerciale");
+
+  const renderCard = (t) => {
+    const isDone = !!justDone[t.id] && t.status === "done";
+    const isCollapsed = collapsed.has(t.id) && !isDone;
+    const steps = t.steps || [];
+    const doneN = steps.filter((s) => s.done).length;
+    const pct = t.status === "done" ? 100 : steps.length ? Math.round((doneN / steps.length) * 100) : 0;
+    const late = t.due_date && t.due_date < today && t.status !== "done";
+    const secs = taskSecs[t.id] || 0;
+    const isRunning = runningTaskId === t.id;
+    const pr = PRIORITIES[t.priority] || PRIORITIES.media;
+    const proj = projectById(t.project_id);
+    const client = t.client_id ? clientById(t.client_id) : proj?.client_id ? clientById(proj.client_id) : null;
+    return (
+      <div key={t.id} className="card" style={{ padding: "12px 14px", marginBottom: 10, opacity: isDone ? 0.75 : 1 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+          <input
+            type="checkbox"
+            checked={isDone}
+            onChange={() => (isDone ? undoComplete(t) : completeTask(t))}
+            aria-label={isDone ? "Annulla completamento" : "Completa il task"}
+            style={{ width: 22, height: 22, accentColor: "var(--brand)", flexShrink: 0, cursor: "pointer" }}
+          />
+          <div
+            style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
+            onClick={() => setEditing(t)}
+          >
+            <div style={{ fontWeight: 700, fontSize: 14.5, textDecoration: isDone ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {t.title}
+            </div>
+          </div>
+          {isRunning ? (
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ok)", flexShrink: 0 }}>in corso</span>
+          ) : (
+            !isDone && (
+              <button className="entry-play" onClick={() => onStart(t)} aria-label="Avvia timer sul task">
+                <IconPlay />
+              </button>
+            )
+          )}
+          <button
+            onClick={() => toggleCollapsed(t.id)}
+            aria-label={isCollapsed ? "Espandi task" : "Ripiega task"}
+            style={{ color: "var(--ink-faint)", padding: 4, fontSize: 12, flexShrink: 0 }}
+          >
+            {isCollapsed ? "▾" : "▴"}
+          </button>
+        </div>
+
+        {isDone && (
+          <div style={{ marginLeft: 33, marginTop: 6, fontSize: 12.5 }}>
+            🌸 Completato ·{" "}
+            <button className="link-btn" style={{ fontSize: 12.5 }} onClick={() => undoComplete(t)}>Annulla</button>
+          </div>
+        )}
+
+        {!isDone && (
+          <>
+            <div className="muted" style={{ fontSize: 12, marginTop: 5, marginLeft: 33, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ color: pr.color, background: pr.bg, fontWeight: 700, padding: "1px 8px", borderRadius: 999, fontSize: 11 }}>{pr.label}</span>
+              {filter === "all" && <span>👤 {nameOf(t.owner_id)}</span>}
+              {t.due_date && (
+                <span style={late ? { color: "var(--stop)", fontWeight: 700 } : undefined}>
+                  {late ? "⚠️ scaduto" : "📅"} {new Date(t.due_date + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" })}
+                </span>
+              )}
+              {(proj || client) && (
+                <span>{proj ? proj.name : ""}{client ? (proj ? ` (${client.name})` : client.name) : ""}</span>
+              )}
+              {secs > 0 && <span>⏱ {fmtDuration(secs)}</span>}
+            </div>
+
+            {steps.length > 0 && (
+              <div className="growth-bar" style={{ marginTop: 8, marginLeft: 33, height: 5 }}>
+                <div className="growth-fill" style={{ width: `${pct}%` }} />
+              </div>
+            )}
+
+            {!isCollapsed && (
+              <div style={{ marginLeft: 33 }}>
+                {steps.length > 0 && (
+                  <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 7 }}>
+                    {steps.map((s) => (
+                      <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={!!s.done}
+                          onChange={() => toggleStep(t, s.id)}
+                          style={{ width: 17, height: 17, accentColor: "var(--brand)", flexShrink: 0, cursor: "pointer" }}
+                        />
+                        <span style={{ textDecoration: s.done ? "line-through" : "none", opacity: s.done ? 0.55 : 1 }}>
+                          {s.text}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+                <DiaryBlock task={t} updateTask={updateTask} />
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const sectionHeader = (key, count) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, margin: "16px 0 8px", fontSize: 12.5, fontWeight: 700, color: "var(--ink-soft)", textTransform: "uppercase", letterSpacing: "0.03em" }}>
+      <span>{CATEGORIES[key].emoji} {CATEGORIES[key].plural}</span>
+      <span style={{ fontWeight: 500, color: "var(--ink-faint)" }}>({count})</span>
+    </div>
+  );
+
   return (
     <>
       <div className="row-between" style={{ marginTop: 20, marginBottom: 8 }}>
@@ -195,114 +311,24 @@ export function TaskQuickList({ tasks, admins, userId, onStart, runningTaskId, t
       ) : open.length === 0 ? (
         <div className="card" style={{ padding: 16 }}>
           <span className="muted" style={{ fontSize: 13 }}>
-            Nessun task in corso. Tocca "Nuovo" per crearne uno: cliente, scadenza, passi spuntabili e via.
+            Nessun task in corso. Tocca "Nuovo" per crearne uno: tipo, cliente, scadenza, passi spuntabili e via.
           </span>
         </div>
       ) : (
-        open.map((t) => {
-          const isDone = !!justDone[t.id] && t.status === "done";
-          const isCollapsed = collapsed.has(t.id) && !isDone;
-          const steps = t.steps || [];
-          const doneN = steps.filter((s) => s.done).length;
-          const pct = t.status === "done" ? 100 : steps.length ? Math.round((doneN / steps.length) * 100) : 0;
-          const late = t.due_date && t.due_date < today && t.status !== "done";
-          const secs = taskSecs[t.id] || 0;
-          const isRunning = runningTaskId === t.id;
-          const pr = PRIORITIES[t.priority] || PRIORITIES.media;
-          const proj = projectById(t.project_id);
-          const client = t.client_id ? clientById(t.client_id) : proj?.client_id ? clientById(proj.client_id) : null;
-          return (
-            <div key={t.id} className="card" style={{ padding: "12px 14px", marginBottom: 10, opacity: isDone ? 0.75 : 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-                <input
-                  type="checkbox"
-                  checked={isDone}
-                  onChange={() => (isDone ? undoComplete(t) : completeTask(t))}
-                  aria-label={isDone ? "Annulla completamento" : "Completa il task"}
-                  style={{ width: 22, height: 22, accentColor: "var(--brand)", flexShrink: 0, cursor: "pointer" }}
-                />
-                <div
-                  style={{ flex: 1, minWidth: 0, cursor: "pointer" }}
-                  onClick={() => setEditing(t)}
-                >
-                  <div style={{ fontWeight: 700, fontSize: 14.5, textDecoration: isDone ? "line-through" : "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {t.title}
-                  </div>
-                </div>
-                {isRunning ? (
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ok)", flexShrink: 0 }}>in corso</span>
-                ) : (
-                  !isDone && (
-                    <button className="entry-play" onClick={() => onStart(t)} aria-label="Avvia timer sul task">
-                      <IconPlay />
-                    </button>
-                  )
-                )}
-                <button
-                  onClick={() => toggleCollapsed(t.id)}
-                  aria-label={isCollapsed ? "Espandi task" : "Ripiega task"}
-                  style={{ color: "var(--ink-faint)", padding: 4, fontSize: 12, flexShrink: 0 }}
-                >
-                  {isCollapsed ? "▾" : "▴"}
-                </button>
-              </div>
-
-              {isDone && (
-                <div style={{ marginLeft: 33, marginTop: 6, fontSize: 12.5 }}>
-                  🌸 Completato ·{" "}
-                  <button className="link-btn" style={{ fontSize: 12.5 }} onClick={() => undoComplete(t)}>Annulla</button>
-                </div>
-              )}
-
-              {!isDone && (
-                <>
-                  <div className="muted" style={{ fontSize: 12, marginTop: 5, marginLeft: 33, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <span style={{ color: pr.color, background: pr.bg, fontWeight: 700, padding: "1px 8px", borderRadius: 999, fontSize: 11 }}>{pr.label}</span>
-                    {filter === "all" && <span>👤 {nameOf(t.owner_id)}</span>}
-                    {t.due_date && (
-                      <span style={late ? { color: "var(--stop)", fontWeight: 700 } : undefined}>
-                        {late ? "⚠️ scaduto" : "📅"} {new Date(t.due_date + "T12:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" })}
-                      </span>
-                    )}
-                    {(proj || client) && (
-                      <span>{proj ? proj.name : ""}{client ? (proj ? ` (${client.name})` : client.name) : ""}</span>
-                    )}
-                    {secs > 0 && <span>⏱ {fmtDuration(secs)}</span>}
-                  </div>
-
-                  {steps.length > 0 && (
-                    <div className="growth-bar" style={{ marginTop: 8, marginLeft: 33, height: 5 }}>
-                      <div className="growth-fill" style={{ width: `${pct}%` }} />
-                    </div>
-                  )}
-
-                  {!isCollapsed && (
-                    <div style={{ marginLeft: 33 }}>
-                      {steps.length > 0 && (
-                        <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 7 }}>
-                          {steps.map((s) => (
-                            <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 9, fontSize: 13.5, cursor: "pointer" }}>
-                              <input
-                                type="checkbox"
-                                checked={!!s.done}
-                                onChange={() => toggleStep(t, s.id)}
-                                style={{ width: 17, height: 17, accentColor: "var(--brand)", flexShrink: 0, cursor: "pointer" }}
-                              />
-                              <span style={{ textDecoration: s.done ? "line-through" : "none", opacity: s.done ? 0.55 : 1 }}>
-                                {s.text}
-                              </span>
-                            </label>
-                          ))}
-                        </div>
-                      )}
-                      <DiaryBlock task={t} updateTask={updateTask} />
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          );
-        })
+        <>
+          {commercial.length > 0 && (
+            <>
+              {sectionHeader("commerciale", commercial.length)}
+              {commercial.map(renderCard)}
+            </>
+          )}
+          {others.length > 0 && (
+            <>
+              {sectionHeader("generale", others.length)}
+              {others.map(renderCard)}
+            </>
+          )}
+        </>
       )}
 
       {loaded && archiveCount > 0 && (

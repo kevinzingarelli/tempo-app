@@ -2,10 +2,22 @@
 // "items" = visibili a TUTTI. "adminItems" = visibili SOLO a Kevin e Asia
 // (funzioni amministrative, costi, redditività, dati sensibili).
 // Se "items" è vuoto, l'intera voce non compare per chi non è admin.
-export const CURRENT_VERSION = "36";
+export const CURRENT_VERSION = "37";
 export const APP_NAME = "Boschetto";
 
 export const CHANGELOG = [
+  {
+    version: "37",
+    date: "2026-07-23",
+    time: "21:00",
+    title: "Task divisi: commerciali e resto",
+    items: [],
+    adminItems: [
+      "I task ora si dividono in due famiglie: 💼 Commerciali e 🗂️ Generale",
+      "In Home i commerciali stanno sempre in cima, in una sezione a sé, così non perdi mai di vista il lavoro sulle vendite",
+      "Quando crei o modifichi un task scegli il tipo con un tocco; i task già esistenti finiscono in “Generale” e li sposti quando vuoi",
+    ],
+  },
   {
     version: "36",
     date: "2026-07-23",
